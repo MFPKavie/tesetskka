@@ -3,12 +3,11 @@ import random
 import tkinter as tk
 from tkinter import messagebox, simpledialog
 
-# Warna dasar petak. Nilai grid tetap sama agar kompatibel dengan algoritma.
 COLORS = {
-    1: "#E0E0E0",   # Jalan biasa - biaya 1%
-    3: "#4A9DF5",   # Tanjakan - biaya 3%
-    5: "#FF9999",   # Macet - biaya 5%
-    -1: "#303943",  # Tembok - tidak dapat dilewati
+    1: "#E0E0E0",   # Jalan biasa
+    3: "#4A9DF5",   # Tanjakan
+    5: "#FF9999",   # Macet
+    -1: "#303943",  # Tembok
 }
 
 CELL_SIZE = 50
@@ -215,9 +214,6 @@ class GridConfigurator:
 
         self.selected_algorithms = []
 
-        # =====================================
-        # ZOOM CONFIGURATION
-        # =====================================
 
         self.zoom_factor = 1.0
         self.zoom_min = 0.5
@@ -226,9 +222,6 @@ class GridConfigurator:
 
         self.base_canvas_width = cols * CELL_SIZE
         self.base_canvas_height = rows * CELL_SIZE
-        # =====================================
-        # SCROLLABLE MAIN WINDOW
-        # =====================================
 
         self.scroll_container = tk.Frame(root, bg="#F4F6F9")
         self.scroll_container.pack(fill=tk.BOTH, expand=True)
@@ -265,7 +258,7 @@ class GridConfigurator:
             expand=True
         )
 
-        # Frame utama untuk seluruh komponen UI
+
         self.content_frame = tk.Frame(
             self.outer_canvas,
             bg="#F4F6F9"
@@ -277,7 +270,7 @@ class GridConfigurator:
             anchor="nw"
         )
 
-        # Update scroll area otomatis
+
         self.content_frame.bind(
             "<Configure>",
             lambda event: self.outer_canvas.configure(
@@ -302,7 +295,7 @@ class GridConfigurator:
             lambda event: self.outer_canvas.yview_scroll(3, "units")
         )
 
-        # Shortcut zoom pada konfigurator.
+
         self.root.bind_all("<Control-plus>", lambda event: self.zoom_in())
         self.root.bind_all("<Control-equal>", lambda event: self.zoom_in())
         self.root.bind_all("<Control-minus>", lambda event: self.zoom_out())
@@ -500,7 +493,7 @@ class GridConfigurator:
         ).pack(side=tk.LEFT, padx=5)
 
         # =====================================
-        # GRID DAN LEGENDA
+        # GRID
         # =====================================
 
         self.map_frame = tk.Frame(
@@ -627,8 +620,7 @@ class GridConfigurator:
         screen_w = self.root.winfo_screenwidth()
         screen_h = self.root.winfo_screenheight()
 
-        # Ukuran window dibatasi layar,
-        # bukan mengikuti keseluruhan ukuran grid.
+
         width = min(
             max(MIN_WINDOW_WIDTH, 1400),
             screen_w - 40
@@ -984,7 +976,6 @@ def draw_multi_results(grid, start, goal, results):
                 pass
         root.destroy()
 
-    # Main scrollable area: grid, legend/results panel, and controls.
     scroll_container = tk.Frame(root, bg="#F4F6F9")
     scroll_container.pack(fill=tk.BOTH, expand=True)
 
@@ -1004,7 +995,7 @@ def draw_multi_results(grid, start, goal, results):
 
     content.bind("<Configure>", update_scroll_region)
 
-    # Zoom controls are outside the grid canvas, so they remain readable.
+
     zoom_bar = tk.Frame(content, bg="#F4F6F9")
     zoom_bar.pack(fill=tk.X, padx=15, pady=(12, 5))
 
@@ -1031,7 +1022,6 @@ def draw_multi_results(grid, start, goal, results):
     )
     canvas.pack(side=tk.LEFT, padx=(0, 15), anchor="n")
 
-    # Panel hasil dan status baterai realtime.
     panel = tk.Frame(
         main_frame, relief=tk.GROOVE, borderwidth=1,
         padx=12, pady=12, bg="#FFFFFF"
@@ -1367,7 +1357,7 @@ def draw_multi_results(grid, start, goal, results):
             content.update_idletasks()
             view.configure(scrollregion=view.bbox("all"))
 
-    # Buttons remain part of the scrollable content and can be reached below.
+    
     btn_frame = tk.Frame(panel, bg="#FFFFFF")
     btn_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
 
@@ -1386,7 +1376,7 @@ def draw_multi_results(grid, start, goal, results):
         font=("Arial", 9, "bold"), command=lambda: choose(None)
     ).pack(fill=tk.X, pady=2)
 
-    # Scroll with mouse wheel; Shift + wheel scrolls horizontally.
+    
     def on_mousewheel(event):
         if event.state & 0x0001:
             view.xview_scroll(int(-event.delta / 120), "units")
@@ -1402,7 +1392,7 @@ def draw_multi_results(grid, start, goal, results):
     root.bind_all("<Control-KP_Add>", lambda event: set_zoom(zoom["value"] + zoom_step))
     root.bind_all("<Control-KP_Subtract>", lambda event: set_zoom(zoom["value"] - zoom_step))
 
-    # Initial render and responsive window sizing.
+    
     render_scene()
     root.update_idletasks()
     screen_w = root.winfo_screenwidth()
