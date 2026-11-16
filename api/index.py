@@ -10,6 +10,18 @@ ALGORITHMS = {"bfs": run_bfs, "dfs": run_dfs, "ucs": run_ucs}
 
 
 class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self._respond(200, {
+            "message": "Search API is ready. Send a POST request with grid, start, goal, and algorithm.",
+            "algorithms": list(ALGORITHMS),
+            "example": {
+                "grid": [[1, 1], [1, 1]],
+                "start": [0, 0],
+                "goal": [1, 1],
+                "algorithm": "ucs",
+            },
+        })
+
     def do_POST(self):
         try:
             length = int(self.headers.get("Content-Length", "0"))
