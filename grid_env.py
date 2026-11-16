@@ -26,7 +26,7 @@ MIN_WINDOW_HEIGHT = 720
 
 
 class GridConfigurator:
-    def __init__(self, root, rows, cols):
+    def __init__(self, root, rows, cols, initial=None):
         self.root = root
         self.root.title("EV Navigation - Custom Grid Configurator")
 
@@ -37,6 +37,19 @@ class GridConfigurator:
         self.start_pos = (rows - 1, 0)
         self.goal_pos = (0, cols - 1)
         self.mode = 1
+
+        # Pakai peta dari percobaan sebelumnya (jika ada)
+        if initial is not None:
+            prev_grid, prev_start, prev_goal, prev_battery = initial
+            self.grid = [row[:] for row in prev_grid]
+            self.start_pos = prev_start
+            self.goal_pos = prev_goal
+        else:
+            prev_battery = None
+
+        # Baterai awal (satu nilai untuk semua algoritma, kosong = default 100)
+        self.battery_var = tk.StringVar(value="" if prev_battery is None else str(prev_battery))
+        self.battery = 100
 
         # Variabel Checkbutton untuk tiap algoritma (Default: UCS & BFS aktif)
         self.algo_vars = {}
@@ -86,6 +99,13 @@ class GridConfigurator:
                 activeforeground=style["color"]
             )
             cb.pack(side=tk.LEFT, padx=8)
+
+        self.battery_frame = tk.Frame(root, relief=tk.GROOVE, borderwidth=1, padx=8, pady=6)
+        self.battery_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
+
+        tk.Label(self.battery_frame, text="Baterai Awal % (penuh = 100):", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=5)
+        tk.Entry(self.battery_frame, textvariable=self.battery_var, width=6, justify="center").pack(side=tk.LEFT, padx=5)
+
 
         # --- CANVAS GRID ---
         self.canvas = tk.Canvas(root, width=cols * CELL_SIZE, height=rows * CELL_SIZE, bg="white")
@@ -226,29 +246,49 @@ class GridConfigurator:
             messagebox.showwarning("Peringatan", "Pilih minimal satu algoritma sebelum memulai simulasi!")
             return
 
+        # Validasi input baterai (kosong -> 100)
+        raw = self.battery_var.get().strip()
+        if raw == "":
+            battery = 100
+        else:
+            try:
+                battery = int(raw)
+            except ValueError:
+                messagebox.showerror("Error", "Baterai awal harus berupa angka bulat!")
+                return
+            if not 1 <= battery <= 100:
+                messagebox.showerror("Error", "Baterai awal harus antara 1 sampai 100!")
+                return
+
+        self.battery = battery
         self.selected_algorithms = chosen
         self.root.destroy()
 
 
-def get_env():
-    """Meminta input ukuran grid dari user, lalu membuka UI interaktif."""
-    root = tk.Tk()
-    root.withdraw()
+def get_env(initial=None):
+    """
+    Membuka konfigurator. Jika `initial` (grid, start, goal) diberikan,
+    dialog ukuran dilewati dan peta sebelumnya dipakai sebagai titik awal.
+    """
+    if initial is None:
+        root = tk.Tk()
+        root.withdraw()
 
-    cols = simpledialog.askinteger("Input Grid", "Masukkan jumlah Kolom (lebar, misal: 6-12):", initialvalue=8, minvalue=3, maxvalue=20)
-    rows = simpledialog.askinteger("Input Grid", "Masukkan jumlah Baris (tinggi, misal: 6-12):", initialvalue=8, minvalue=3, maxvalue=20)
+        cols = simpledialog.askinteger("Input Grid", "Masukkan jumlah Kolom (lebar, misal: 6-12):", initialvalue=8, minvalue=3, maxvalue=20)
+        rows = simpledialog.askinteger("Input Grid", "Masukkan jumlah Baris (tinggi, misal: 6-12):", initialvalue=8, minvalue=3, maxvalue=20)
 
-    if not cols or not rows:
-        cols, rows = 8, 8
+        if not cols or not rows:
+            cols, rows = 8, 8
 
-    root.destroy()
+        root.destroy()
+    else:
+        rows, cols = len(initial[0]), len(initial[0][0])
 
     config_root = tk.Tk()
-    app = GridConfigurator(config_root, rows, cols)
+    app = GridConfigurator(config_root, rows, cols, initial)
     config_root.mainloop()
 
-    return app.grid, app.start_pos, app.goal_pos, app.selected_algorithms
-
+    return app.grid, app.start_pos, app.goal_pos, app.selected_algorithms, app.battery
 
 def draw_multi_results(grid, start, goal, results):
     """
@@ -259,6 +299,12 @@ def draw_multi_results(grid, start, goal, results):
         {"name": str, "cost": float, "path": list, "visited": int, "time_ms": float}, ...
     ]
     """
+    action = {"value": None}  # "same" | "new" | None (keluar)
+
+    def choose(value):
+        action["value"] = value
+        root.destroy()
+
     root = tk.Tk()
     root.title("EV Navigation - Hasil Perbandingan Rute")
 
@@ -319,6 +365,15 @@ def draw_multi_results(grid, start, goal, results):
 
     tk.Label(legend_frame, text="Hasil & Perbandingan Algoritma", font=("Arial", 12, "bold")).pack(anchor="w", pady=(0, 10))
 
+    if not any(res["path"] for res in results):
+        tk.Label(
+            legend_frame,
+            text="Tidak ada rute yang dapat mencapai tujuan!",
+            fg="white", bg="#D32F2F",
+            font=("Arial", 10, "bold"),
+            justify=tk.LEFT, padx=10, pady=8
+        ).pack(fill=tk.X, pady=(0, 10))
+
     for res in results:
         name = res["name"]
         color = ALGO_STYLES[name]["color"]
@@ -332,19 +387,44 @@ def draw_multi_results(grid, start, goal, results):
         tk.Label(header, text="■■", fg=color, font=("Arial", 12, "bold")).pack(side=tk.LEFT)
         tk.Label(header, text=f" {name}", font=("Arial", 10, "bold")).pack(side=tk.LEFT)
 
-        # Detail Statistik
+ # Detail Statistik
         if res["path"]:
             detail = (
-                f"   • Konsumsi Baterai : {res['cost']}%\n"
+                f"   • Baterai Awal      : {res['battery']}%\n"
+                f"   • Konsumsi Baterai  : {res['cost']}%\n"
+                f"   • Sisa Baterai      : {res['remaining']}%\n"
                 f"   • Panjang Rute      : {len(res['path'])} petak\n"
                 f"   • Node Dieksplorasi : {res['visited']} node\n"
-                f"   • Waktu Komputasi   : {res['time_ms']:.2f} ms"
             )
         else:
             detail = "   • Status: Jalur tidak ditemukan"
 
+
         tk.Label(card, text=detail, justify=tk.LEFT, font=("Consolas", 9)).pack(anchor="w")
+
+        # perlu dihapuskah?
         tk.Frame(legend_frame, height=1, bg="#CCCCCC").pack(fill=tk.X, pady=4)
+
+        if res["path"] and not res["enough"]:
+            tk.Label(
+                card,
+                text="⚠ Baterai Tidak Cukup! (Sisa 0%)",
+                fg="white", bg="#D32F2F",
+                font=("Arial", 9, "bold"),
+                padx=8, pady=3
+            ).pack(anchor="w", pady=(4, 0))
+        
+
+    # Tombol navigasi percobaan berikutnya
+    btn_frame = tk.Frame(legend_frame)
+    btn_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
+
+    tk.Button(btn_frame, text="🔁 Percobaan Baru (Peta Sama)", bg="#4CAF50", fg="white",
+              font=("Arial", 10, "bold"), command=lambda: choose("same")).pack(fill=tk.X, pady=2)
+    tk.Button(btn_frame, text="🗺 Percobaan Baru (Peta Baru)", bg="#2196F3", fg="white",
+              font=("Arial", 10, "bold"), command=lambda: choose("new")).pack(fill=tk.X, pady=2)
+    tk.Button(btn_frame, text="Keluar", bg="#F44336", fg="white",
+              font=("Arial", 10, "bold"), command=lambda: choose(None)).pack(fill=tk.X, pady=2)
 
     # Atur ukuran window otomatis menyesuaikan konten
     root.update_idletasks()
@@ -355,3 +435,4 @@ def draw_multi_results(grid, start, goal, results):
     root.geometry(f"{min(width, screen_w - 40)}x{min(height, screen_h - 80)}")
 
     root.mainloop()
+    return action["value"]

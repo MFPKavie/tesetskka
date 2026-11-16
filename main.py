@@ -1,11 +1,8 @@
 # main.py
 import time
-import tkinter as tk
-from tkinter import messagebox
 
 from bfs import run_bfs
 from dfs import run_dfs
-from dijkstra import run_dijkstra
 from grid_env import draw_multi_results, get_env
 from ucs import run_ucs
 
@@ -16,23 +13,15 @@ ALGORITHM_RUNNERS = {
 }
 
 
-def main():
-    # 1. Buka konfigurator peta & pilih algoritma (minimal 1)
-    grid, start, goal, selected_algorithms = get_env()
-
-    # Jika user menutup jendela konfigurator (tombol X) tanpa klik Start
-    if not selected_algorithms:
-        print("Simulasi dibatalkan oleh pengguna.")
-        return
-
+def run_experiment(grid, start, goal, selected_algorithms, battery):
+    """Menjalankan semua algoritma terpilih dengan baterai awal yang sama."""
     print(f"\nTitik Awal (Start) : {start}")
     print(f"Titik Tujuan (Goal): {goal}")
+    print(f"Baterai Awal       : {battery}%")
     print("-" * 55)
 
     results = []
-    any_path_found = False
 
-    # 2. Jalankan setiap algoritma yang dipilih secara berurutan
     for algo_name in selected_algorithms:
         runner = ALGORITHM_RUNNERS[algo_name]
 
@@ -41,10 +30,16 @@ def main():
         elapsed_ms = (time.perf_counter() - started_at) * 1000
 
         if path:
-            any_path_found = True
+            enough = total_cost < battery  # ubah ke <= kalau habis tepat di 0% dianggap sampai
+            remaining = battery - total_cost if enough else 0
+
             print(f"[{algo_name}]")
-            print(f"  Baterai: {total_cost}% | Langkah: {len(path)} | Node: {visited_count} | Waktu: {elapsed_ms:.2f} ms")
+            print(f"  Konsumsi: {total_cost}% | Sisa: {remaining}%")
+            if not enough:
+                print("  ⚠ Baterai Tidak Cukup!")
+            print(f"  Langkah: {len(path)} | Node: {visited_count} | Waktu: {elapsed_ms:.2f} ms")
         else:
+            enough, remaining = False, battery
             print(f"[{algo_name}] -> Jalur tidak ditemukan.")
 
         results.append({
@@ -53,18 +48,34 @@ def main():
             "path": path,
             "visited": visited_count,
             "time_ms": elapsed_ms,
+            "battery": battery,
+            "remaining": remaining,
+            "enough": enough,
         })
 
     print("-" * 55)
+    return results
 
-    # 3. Tampilkan hasil visual jika minimal satu rute ditemukan
-    if any_path_found:
-        draw_multi_results(grid, start, goal, results)
-    else:
-        root = tk.Tk()
-        root.withdraw()
-        messagebox.showwarning("Jalur Buntu", "Tidak ada rute yang dapat mencapai tujuan (terhalang tembok penuh)!")
-        root.destroy()
+
+def main():
+    initial = None  # None = peta baru; (grid, start, goal, battery) = pakai peta sebelumnya
+
+    while True:
+        grid, start, goal, selected_algorithms, battery = get_env(initial)
+
+        # User menutup jendela konfigurator (tombol X) tanpa klik Start -> selesai
+        if not selected_algorithms:
+            break
+
+        results = run_experiment(grid, start, goal, selected_algorithms, battery)
+        action = draw_multi_results(grid, start, goal, results)
+
+        if action == "same":
+            initial = (grid, start, goal, battery)
+        elif action == "new":
+            initial = None
+        else:
+            break
 
 
 if __name__ == "__main__":
