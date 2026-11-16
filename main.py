@@ -1,4 +1,3 @@
-# main.py
 import time
 
 from bfs import run_bfs
