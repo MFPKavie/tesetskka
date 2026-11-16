@@ -1,4 +1,3 @@
-# ucs.py
 import heapq
 
 
