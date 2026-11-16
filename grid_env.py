@@ -14,6 +14,17 @@ COLORS = {
 CELL_SIZE = 50
 PADDING = 4
 
+# Daftar algoritma yang bisa dipilih user di menu
+ALGORITHMS = {
+    "Dijkstra": "dijkstra",
+    "UCS (Uniform Cost Search)": "ucs",
+}
+DEFAULT_ALGORITHM = "Dijkstra"
+
+# Ukuran area layar minimum agar tombol toolbar tidak terpotong
+MIN_WINDOW_WIDTH = 900
+MIN_WINDOW_HEIGHT = 700
+
 class GridConfigurator:
     def __init__(self, root, rows, cols):
         self.root = root
@@ -28,6 +39,11 @@ class GridConfigurator:
         self.goal_pos = (0, cols - 1)  # Default pojok kanan atas
 
         self.mode = 1  # 1: Normal, 3: Tanjakan, 5: Macet, -1: Tembok, 'S': Start, 'G': Goal
+
+        # Algoritma yang dipilih user (diisi lewat menu di bawah)
+        self.algorithm = DEFAULT_ALGORITHM
+
+        self._build_menu()
 
         # Frame Kontrol Pilihan
         self.control_frame = tk.Frame(root)
@@ -78,7 +94,52 @@ class GridConfigurator:
         self.btn_done = tk.Button(root, text="Selesai & Jalankan Simulasi", bg="lightgreen", font=("Arial", 11, "bold"), command=self.finish_config)
         self.btn_done.pack(side=tk.BOTTOM, pady=10)
 
+        # Beri ruang lega: batas minimum window & posisi di tengah layar
+        self._setup_window_size()
+
         self.draw_grid()
+
+    def _build_menu(self):
+        """Membuat menubar dengan pilihan algoritma pathfinding."""
+        menubar = tk.Menu(self.root)
+
+        self.algorithm_var = tk.StringVar(master=self.root, value=self.algorithm)
+        algo_menu = tk.Menu(menubar, tearoff=0)
+        for name in ALGORITHMS:
+            algo_menu.add_radiobutton(
+                label=name,
+                value=name,
+                variable=self.algorithm_var,
+                command=lambda n=name: self.set_algorithm(n),
+            )
+        menubar.add_cascade(label="Algoritma", menu=algo_menu)
+
+        self.root.config(menu=menubar)
+
+    def set_algorithm(self, name):
+        self.algorithm = name
+        self.algorithm_var.set(name)
+        self.root.title(f"EV Navigation - Custom Grid Configurator [{name}]")
+
+    def _setup_window_size(self):
+        """Memperbesar window agar konten tidak mepet dengan tepi layar."""
+        self.root.update_idletasks()
+
+        width = max(self.root.winfo_reqwidth(), MIN_WINDOW_WIDTH)
+        height = max(self.root.winfo_reqheight(), MIN_WINDOW_HEIGHT)
+
+        screen_w = self.root.winfo_screenwidth()
+        screen_h = self.root.winfo_screenheight()
+
+        # Jangan melebihi area layar yang tersedia
+        width = min(width, screen_w - 40)
+        height = min(height, screen_h - 80)
+
+        x = max((screen_w - width) // 2, 0)
+        y = max((screen_h - height) // 3, 0)
+
+        self.root.minsize(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT)
+        self.root.geometry(f"{width}x{height}+{x}+{y}")
 
     def set_mode(self, m):
         self.mode = m
@@ -201,13 +262,16 @@ def get_env():
     app = GridConfigurator(config_root, rows, cols)
     config_root.mainloop()
 
-    return app.grid, app.start_pos, app.goal_pos
+    return app.grid, app.start_pos, app.goal_pos, app.algorithm
 
 
-def draw_map(grid, start, goal, optimal_path=[]):
-    """Menampilkan hasil akhir rute optimal Dijkstra pada peta 2D."""
+def draw_map(grid, start, goal, optimal_path=None, algorithm=DEFAULT_ALGORITHM,
+             total_cost=None):
+    """Menampilkan hasil akhir rute optimal pada peta 2D."""
+    optimal_path = optimal_path or []
+
     root = tk.Tk()
-    root.title("EV Navigation - Hasil Rute Optimal")
+    root.title(f"EV Navigation - Hasil Rute Optimal ({algorithm})")
 
     rows, cols = len(grid), len(grid[0])
     canvas = tk.Canvas(root, width=cols * CELL_SIZE, height=rows * CELL_SIZE, bg="white")
@@ -234,5 +298,22 @@ def draw_map(grid, start, goal, optimal_path=[]):
                 canvas.create_text((x1+x2)/2, (y1+y2)/2, text="G", fill="red", font=("Arial", 16, "bold"))
             elif pos in path_set:
                 canvas.create_text((x1+x2)/2, (y1+y2)/2, text="*", fill="gold", font=("Arial", 22, "bold"))
+
+    # Ringkasan hasil di bawah peta
+    summary = f"Algoritma: {algorithm}"
+    if total_cost is not None:
+        summary += f"   |   Total Konsumsi Baterai: {total_cost}%"
+        summary += f"   |   Panjang Rute: {len(optimal_path)} petak"
+    tk.Label(root, text=summary, font=("Arial", 11, "bold")).pack(pady=(0, 12))
+
+    # Beri ruang lega di sekitar peta
+    root.update_idletasks()
+    width = max(root.winfo_reqwidth() + 120, MIN_WINDOW_WIDTH // 2 + 260)
+    height = max(root.winfo_reqheight() + 120, MIN_WINDOW_HEIGHT // 2)
+    screen_w = root.winfo_screenwidth()
+    screen_h = root.winfo_screenheight()
+    width = min(width, screen_w - 40)
+    height = min(height, screen_h - 80)
+    root.geometry(f"{width}x{height}+{max((screen_w - width) // 2, 0)}+{max((screen_h - height) // 3, 0)}")
 
     root.mainloop()
