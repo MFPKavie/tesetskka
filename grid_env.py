@@ -215,8 +215,109 @@ class GridConfigurator:
 
         self.selected_algorithms = []
 
+        # =====================================
+        # ZOOM CONFIGURATION
+        # =====================================
+
+        self.zoom_factor = 1.0
+        self.zoom_min = 0.5
+        self.zoom_max = 2.0
+        self.zoom_step = 0.1
+
+        self.base_canvas_width = cols * CELL_SIZE
+        self.base_canvas_height = rows * CELL_SIZE
+        # =====================================
+        # SCROLLABLE MAIN WINDOW
+        # =====================================
+
+        self.scroll_container = tk.Frame(root, bg="#F4F6F9")
+        self.scroll_container.pack(fill=tk.BOTH, expand=True)
+
+        self.outer_canvas = tk.Canvas(
+            self.scroll_container,
+            bg="#F4F6F9",
+            highlightthickness=0
+        )
+
+        self.vertical_scrollbar = tk.Scrollbar(
+            self.scroll_container,
+            orient=tk.VERTICAL,
+            command=self.outer_canvas.yview
+        )
+
+        self.horizontal_scrollbar = tk.Scrollbar(
+            self.scroll_container,
+            orient=tk.HORIZONTAL,
+            command=self.outer_canvas.xview
+        )
+
+        self.outer_canvas.configure(
+            yscrollcommand=self.vertical_scrollbar.set,
+            xscrollcommand=self.horizontal_scrollbar.set
+        )
+
+        self.vertical_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.horizontal_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+
+        self.outer_canvas.pack(
+            side=tk.LEFT,
+            fill=tk.BOTH,
+            expand=True
+        )
+
+        # Frame utama untuk seluruh komponen UI
+        self.content_frame = tk.Frame(
+            self.outer_canvas,
+            bg="#F4F6F9"
+        )
+
+        self.content_window = self.outer_canvas.create_window(
+            (0, 0),
+            window=self.content_frame,
+            anchor="nw"
+        )
+
+        # Update scroll area otomatis
+        self.content_frame.bind(
+            "<Configure>",
+            lambda event: self.outer_canvas.configure(
+                scrollregion=self.outer_canvas.bbox("all")
+            )
+        )
+
+        # Mouse wheel Windows
+        self.outer_canvas.bind_all(
+            "<MouseWheel>",
+            self._on_mousewheel
+        )
+
+        # Mouse wheel Linux
+        self.outer_canvas.bind_all(
+            "<Button-4>",
+            lambda event: self.outer_canvas.yview_scroll(-3, "units")
+        )
+
+        self.outer_canvas.bind_all(
+            "<Button-5>",
+            lambda event: self.outer_canvas.yview_scroll(3, "units")
+        )
+
+        # Shortcut zoom pada konfigurator.
+        self.root.bind_all("<Control-plus>", lambda event: self.zoom_in())
+        self.root.bind_all("<Control-equal>", lambda event: self.zoom_in())
+        self.root.bind_all("<Control-minus>", lambda event: self.zoom_out())
+        self.root.bind_all("<Control-KP_Add>", lambda event: self.zoom_in())
+        self.root.bind_all("<Control-KP_Subtract>", lambda event: self.zoom_out())
+
+        # =====================================
         # BARIS 1: ALAT EDIT
-        self.control_frame = tk.Frame(root, bg="#F4F6F9")
+        # =====================================
+
+        self.control_frame = tk.Frame(
+            self.content_frame,
+            bg="#F4F6F9"
+        )
+
         self.control_frame.pack(
             side=tk.TOP,
             fill=tk.X,
@@ -267,6 +368,47 @@ class GridConfigurator:
 
         tk.Label(
             self.control_frame,
+            text=" | Zoom:",
+            bg="#F4F6F9",
+            font=("Arial", 9, "bold")
+        ).pack(side=tk.LEFT, padx=(8, 3))
+
+        tk.Button(
+            self.control_frame,
+            text="−",
+            width=3,
+            bg="white",
+            font=("Arial", 10, "bold"),
+            command=self.zoom_out
+        ).pack(side=tk.LEFT, padx=2)
+
+        self.zoom_label = tk.Label(
+            self.control_frame,
+            text="100%",
+            bg="#F4F6F9",
+            font=("Arial", 9, "bold"),
+            width=5
+        )
+        self.zoom_label.pack(side=tk.LEFT, padx=2)
+
+        tk.Button(
+            self.control_frame,
+            text="+",
+            width=3,
+            bg="white",
+            font=("Arial", 10, "bold"),
+            command=self.zoom_in
+        ).pack(side=tk.LEFT, padx=2)
+
+        tk.Button(
+            self.control_frame,
+            text="Reset Zoom",
+            bg="#DCEBFF",
+            fg="#174EA6",
+            command=self.reset_zoom
+        ).pack(side=tk.LEFT, padx=2)
+        tk.Label(
+            self.control_frame,
             text="Tembok %",
             bg="#F4F6F9"
         ).pack(side=tk.LEFT, padx=(8, 2))
@@ -281,9 +423,12 @@ class GridConfigurator:
             textvariable=self.wall_ratio_var
         ).pack(side=tk.LEFT, padx=2)
 
+        # =====================================
         # BARIS 2: PILIHAN ALGORITMA
+        # =====================================
+
         self.algo_frame = tk.Frame(
-            root,
+            self.content_frame,
             relief=tk.GROOVE,
             borderwidth=1,
             padx=8,
@@ -320,9 +465,12 @@ class GridConfigurator:
 
             cb.pack(side=tk.LEFT, padx=8)
 
+        # =====================================
         # BARIS 3: BATERAI
+        # =====================================
+
         self.battery_frame = tk.Frame(
-            root,
+            self.content_frame,
             relief=tk.GROOVE,
             borderwidth=1,
             padx=8,
@@ -351,8 +499,14 @@ class GridConfigurator:
             justify="center"
         ).pack(side=tk.LEFT, padx=5)
 
+        # =====================================
         # GRID DAN LEGENDA
-        self.map_frame = tk.Frame(root, bg="#F4F6F9")
+        # =====================================
+
+        self.map_frame = tk.Frame(
+            self.content_frame,
+            bg="#F4F6F9"
+        )
 
         self.map_frame.pack(
             side=tk.TOP,
@@ -377,7 +531,10 @@ class GridConfigurator:
             anchor="n"
         )
 
-        self.canvas.bind("<Button-1>", self.on_cell_click)
+        self.canvas.bind(
+            "<Button-1>",
+            self.on_cell_click
+        )
 
         self.legend_frame = draw_legend(self.map_frame)
 
@@ -387,9 +544,12 @@ class GridConfigurator:
             anchor="n"
         )
 
+        # =====================================
         # TOMBOL START SIMULASI
+        # =====================================
+
         self.btn_done = tk.Button(
-            root,
+            self.content_frame,
             text="▶  Start Simulasi",
             bg="#25A65A",
             fg="white",
@@ -401,10 +561,47 @@ class GridConfigurator:
             command=self.finish_config
         )
 
-        self.btn_done.pack(side=tk.BOTTOM, pady=10)
+        self.btn_done.pack(
+            side=tk.TOP,
+            pady=15
+        )
+
+        # =====================================
+        # UKURAN WINDOW
+        # =====================================
 
         self._setup_window_size()
         self.draw_grid()
+
+    def _on_mousewheel(self, event):
+        self.outer_canvas.yview_scroll(
+            int(-1 * (event.delta / 120)),
+            "units"
+    )
+
+
+    def zoom_in(self):
+        self.set_zoom(min(self.zoom_factor + self.zoom_step, self.zoom_max))
+
+    def zoom_out(self):
+        self.set_zoom(max(self.zoom_factor - self.zoom_step, self.zoom_min))
+
+    def reset_zoom(self):
+        self.set_zoom(1.0)
+
+    def set_zoom(self, new_zoom):
+        """Ubah ukuran grid dengan menggambar ulang pada skala baru."""
+        new_zoom = max(self.zoom_min, min(self.zoom_max, round(new_zoom, 2)))
+        if new_zoom == self.zoom_factor:
+            return
+
+        self.zoom_factor = new_zoom
+        self.zoom_label.config(text=f"{int(round(new_zoom * 100))}%")
+        self.draw_grid()
+        self.content_frame.update_idletasks()
+        self.outer_canvas.configure(
+            scrollregion=self.outer_canvas.bbox("all")
+        )
 
     def _tool_button(self, text, bg, fg, mode):
 
@@ -422,25 +619,25 @@ class GridConfigurator:
             command=lambda m=mode: self.set_mode(m)
         ).pack(side=tk.LEFT, padx=2)
 
+    
     def _setup_window_size(self):
 
         self.root.update_idletasks()
 
-        width = max(
-            self.root.winfo_reqwidth(),
-            MIN_WINDOW_WIDTH
-        )
-
-        height = max(
-            self.root.winfo_reqheight(),
-            MIN_WINDOW_HEIGHT
-        )
-
         screen_w = self.root.winfo_screenwidth()
         screen_h = self.root.winfo_screenheight()
 
-        width = min(width, screen_w - 40)
-        height = min(height, screen_h - 80)
+        # Ukuran window dibatasi layar,
+        # bukan mengikuti keseluruhan ukuran grid.
+        width = min(
+            max(MIN_WINDOW_WIDTH, 1400),
+            screen_w - 40
+        )
+
+        height = min(
+            max(MIN_WINDOW_HEIGHT, 850),
+            screen_h - 80
+        )
 
         x = max((screen_w - width) // 2, 0)
         y = max((screen_h - height) // 3, 0)
@@ -453,6 +650,7 @@ class GridConfigurator:
         self.root.geometry(
             f"{width}x{height}+{x}+{y}"
         )
+
 
     def set_mode(self, mode):
         self.mode = mode
@@ -544,71 +742,73 @@ class GridConfigurator:
         return False
 
     def draw_grid(self):
-
+        """Gambar ulang grid sesuai zoom aktif."""
         self.canvas.delete("all")
+
+        cell = max(12, int(CELL_SIZE * self.zoom_factor))
+        padding = max(1, int(PADDING * self.zoom_factor))
+        self.current_cell_size = cell
+
+        canvas_width = self.cols * cell
+        canvas_height = self.rows * cell
+        self.canvas.configure(
+            width=canvas_width,
+            height=canvas_height,
+            scrollregion=(0, 0, canvas_width, canvas_height)
+        )
+
+        marker_radius = max(7, int(14 * self.zoom_factor))
+        marker_font = max(8, int(15 * self.zoom_factor))
 
         for r in range(self.rows):
             for c in range(self.cols):
-
                 value = self.grid[r][c]
+                x1 = c * cell + padding
+                y1 = r * cell + padding
+                x2 = (c + 1) * cell - padding
+                y2 = (r + 1) * cell - padding
 
-                x1 = c * CELL_SIZE + PADDING
-                y1 = r * CELL_SIZE + PADDING
-                x2 = (c + 1) * CELL_SIZE - PADDING
-                y2 = (r + 1) * CELL_SIZE - PADDING
-
-                draw_tile(
-                    self.canvas,
-                    x1, y1, x2, y2,
-                    value
-                )
+                draw_tile(self.canvas, x1, y1, x2, y2, value,
+                          width=max(1, self.zoom_factor))
 
                 pos = (r, c)
+                cx = (x1 + x2) / 2
+                cy = (y1 + y2) / 2
 
                 if pos == self.start_pos:
-
                     self.canvas.create_oval(
-                        (x1+x2)/2-14,
-                        (y1+y2)/2-14,
-                        (x1+x2)/2+14,
-                        (y1+y2)/2+14,
-                        fill="#FFFFFF",
-                        outline="#1769E0",
-                        width=2
+                        cx - marker_radius, cy - marker_radius,
+                        cx + marker_radius, cy + marker_radius,
+                        fill="#FFFFFF", outline="#1769E0",
+                        width=max(1, int(2 * self.zoom_factor))
                     )
-
                     self.canvas.create_text(
-                        (x1+x2)/2,
-                        (y1+y2)/2,
-                        text="S",
-                        fill="#1769E0",
-                        font=("Arial", 15, "bold")
+                        cx, cy, text="S", fill="#1769E0",
+                        font=("Arial", marker_font, "bold")
                     )
 
                 elif pos == self.goal_pos:
-
                     self.canvas.create_oval(
-                        (x1+x2)/2-14,
-                        (y1+y2)/2-14,
-                        (x1+x2)/2+14,
-                        (y1+y2)/2+14,
-                        fill="#FFFFFF",
-                        outline="#D92D20",
-                        width=2
+                        cx - marker_radius, cy - marker_radius,
+                        cx + marker_radius, cy + marker_radius,
+                        fill="#FFFFFF", outline="#D92D20",
+                        width=max(1, int(2 * self.zoom_factor))
+                    )
+                    self.canvas.create_text(
+                        cx, cy, text="G", fill="#D92D20",
+                        font=("Arial", marker_font, "bold")
                     )
 
-                    self.canvas.create_text(
-                        (x1+x2)/2,
-                        (y1+y2)/2,
-                        text="G",
-                        fill="#D92D20",
-                        font=("Arial", 15, "bold")
-                    )
+        self.content_frame.update_idletasks()
+        self.outer_canvas.configure(
+            scrollregion=self.outer_canvas.bbox("all")
+        )
 
     def on_cell_click(self, event):
 
-        c = event.x // CELL_SIZE
-        r = event.y // CELL_SIZE
+        cell = getattr(self, "current_cell_size", CELL_SIZE)
+        c = int(event.x // cell)
+        r = int(event.y // cell)
 
         if 0 <= r < self.rows and 0 <= c < self.cols:
 
@@ -763,21 +963,65 @@ def get_env(initial=None):
 
 
 def draw_multi_results(grid, start, goal, results):
-    """Menampilkan rute dan menggerakkan semua mobil secara bersamaan."""
+    """Menampilkan hasil algoritma dan animasi mobil dengan zoom + scroll."""
     action = {"value": None}
-
-    def choose(value):
-        action["value"] = value
-        root.destroy()
-
     root = tk.Tk()
     root.title("EV Navigation - Simulasi Pergerakan Kendaraan")
     root.configure(bg="#F4F6F9")
 
-    main_frame = tk.Frame(root, bg="#F4F6F9")
-    main_frame.pack(padx=15, pady=15)
-
     rows, cols = len(grid), len(grid[0])
+    zoom = {"value": 1.0}
+    zoom_min, zoom_max, zoom_step = 0.5, 2.0, 0.1
+    animation_delay = 450
+    animation_job = {"id": None}
+
+    def choose(value):
+        action["value"] = value
+        if animation_job["id"] is not None:
+            try:
+                root.after_cancel(animation_job["id"])
+            except tk.TclError:
+                pass
+        root.destroy()
+
+    # Main scrollable area: grid, legend/results panel, and controls.
+    scroll_container = tk.Frame(root, bg="#F4F6F9")
+    scroll_container.pack(fill=tk.BOTH, expand=True)
+
+    view = tk.Canvas(scroll_container, bg="#F4F6F9", highlightthickness=0)
+    ybar = tk.Scrollbar(scroll_container, orient=tk.VERTICAL, command=view.yview)
+    xbar = tk.Scrollbar(scroll_container, orient=tk.HORIZONTAL, command=view.xview)
+    view.configure(yscrollcommand=ybar.set, xscrollcommand=xbar.set)
+    ybar.pack(side=tk.RIGHT, fill=tk.Y)
+    xbar.pack(side=tk.BOTTOM, fill=tk.X)
+    view.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    content = tk.Frame(view, bg="#F4F6F9")
+    content_window = view.create_window((0, 0), window=content, anchor="nw")
+
+    def update_scroll_region(_event=None):
+        view.configure(scrollregion=view.bbox("all"))
+
+    content.bind("<Configure>", update_scroll_region)
+
+    # Zoom controls are outside the grid canvas, so they remain readable.
+    zoom_bar = tk.Frame(content, bg="#F4F6F9")
+    zoom_bar.pack(fill=tk.X, padx=15, pady=(12, 5))
+
+    tk.Label(
+        zoom_bar, text="Zoom Grid Simulasi:", bg="#F4F6F9",
+        font=("Arial", 9, "bold")
+    ).pack(side=tk.LEFT, padx=(0, 6))
+
+    zoom_label = tk.Label(
+        zoom_bar, text="100%", width=6, bg="#F4F6F9",
+        font=("Arial", 9, "bold")
+    )
+    zoom_label.pack(side=tk.LEFT, padx=3)
+
+    main_frame = tk.Frame(content, bg="#F4F6F9")
+    main_frame.pack(padx=15, pady=(5, 15), anchor="nw")
+
     canvas = tk.Canvas(
         main_frame,
         width=cols * CELL_SIZE,
@@ -787,88 +1031,24 @@ def draw_multi_results(grid, start, goal, results):
     )
     canvas.pack(side=tk.LEFT, padx=(0, 15), anchor="n")
 
-    # Gambar grid dasar.
-    for r in range(rows):
-        for c in range(cols):
-            x1 = c * CELL_SIZE + PADDING
-            y1 = r * CELL_SIZE + PADDING
-            x2 = (c + 1) * CELL_SIZE - PADDING
-            y2 = (r + 1) * CELL_SIZE - PADDING
-            draw_tile(canvas, x1, y1, x2, y2, grid[r][c])
-
-    # Gambar jalur masing-masing algoritma sebagai panduan.
-    for res in results:
-        path = res.get("path", [])
-        if not path:
-            continue
-
-        style = ALGO_STYLES[res["name"]]
-        ox, oy = style["offset"]
-        coords = []
-
-        for r, c in path:
-            cx = c * CELL_SIZE + CELL_SIZE / 2 + ox
-            cy = r * CELL_SIZE + CELL_SIZE / 2 + oy
-            coords.extend([cx, cy])
-
-        if len(coords) >= 4:
-            canvas.create_line(
-                *coords,
-                fill=style["color"],
-                width=2,
-                dash=(5, 3),
-                tags="route_lines"
-            )
-
-    # Penanda Start dan Goal.
-    for pos, label, color in (
-        (start, "S", "#1769E0"),
-        (goal, "G", "#D92D20")
-    ):
-        r, c = pos
-        cx = c * CELL_SIZE + CELL_SIZE / 2
-        cy = r * CELL_SIZE + CELL_SIZE / 2
-        canvas.create_oval(
-            cx - 13, cy - 13, cx + 13, cy + 13,
-            fill="white", outline=color, width=2,
-            tags="start_goal"
-        )
-        canvas.create_text(
-            cx, cy, text=label, fill=color,
-            font=("Arial", 12, "bold"),
-            tags="start_goal"
-        )
-
     # Panel hasil dan status baterai realtime.
     panel = tk.Frame(
-        main_frame,
-        relief=tk.GROOVE,
-        borderwidth=1,
-        padx=12,
-        pady=12,
-        bg="#FFFFFF"
+        main_frame, relief=tk.GROOVE, borderwidth=1,
+        padx=12, pady=12, bg="#FFFFFF"
     )
     panel.pack(side=tk.RIGHT, fill=tk.Y, anchor="n")
 
     tk.Label(
-        panel,
-        text="Hasil & Perbandingan Algoritma",
-        font=("Arial", 12, "bold"),
-        bg="#FFFFFF"
+        panel, text="Hasil & Perbandingan Algoritma",
+        font=("Arial", 12, "bold"), bg="#FFFFFF"
     ).pack(anchor="w", pady=(0, 8))
 
     tk.Label(
-        panel,
-        text="Mobil bergerak bersamaan • 1 langkah = 450 ms",
-        font=("Arial", 8),
-        fg="#667085",
-        bg="#FFFFFF"
+        panel, text="Mobil bergerak bersamaan • 1 langkah = 450 ms",
+        font=("Arial", 8), fg="#667085", bg="#FFFFFF"
     ).pack(anchor="w", pady=(0, 8))
 
-    # State animasi disimpan terpisah untuk setiap algoritma.
     car_states = []
-
-    # Offset mobil agar tidak bertumpuk saat berada di petak sama.
     car_offsets = [(-10, -9), (10, -9), (0, 10)]
 
     for index, res in enumerate(results):
@@ -882,12 +1062,10 @@ def draw_multi_results(grid, start, goal, results):
 
         header = tk.Frame(card, bg="#FFFFFF")
         header.pack(anchor="w")
-
         tk.Label(
             header, text="●", fg=color, bg="#FFFFFF",
             font=("Arial", 12, "bold")
         ).pack(side=tk.LEFT)
-
         tk.Label(
             header, text=f" {name}", bg="#FFFFFF",
             font=("Arial", 9, "bold")
@@ -896,8 +1074,7 @@ def draw_multi_results(grid, start, goal, results):
         if path:
             planned_cost = sum(grid[r][c] for r, c in path[1:])
             detail = (
-                f"Rute: {len(path)} petak | "
-                f"Estimasi konsumsi: {planned_cost}%\n"
+                f"Rute: {len(path)} petak | Estimasi konsumsi: {planned_cost}%\n"
                 f"Node dieksplorasi: {res.get('visited', 0)} | "
                 f"Waktu pencarian: {res.get('time_ms', 0):.2f} ms"
             )
@@ -911,21 +1088,14 @@ def draw_multi_results(grid, start, goal, results):
             initial_status = "Rute tidak ditemukan"
 
         tk.Label(
-            card,
-            text=detail,
-            justify=tk.LEFT,
-            font=("Consolas", 8),
-            bg="#FFFFFF",
-            fg="#475467"
+            card, text=detail, justify=tk.LEFT,
+            font=("Consolas", 8), bg="#FFFFFF", fg="#475467"
         ).pack(anchor="w", pady=(3, 2))
 
         live_label = tk.Label(
-            card,
-            text=f"Baterai: {initial_battery}% | {initial_status}",
-            justify=tk.LEFT,
-            font=("Arial", 9, "bold"),
-            fg=color,
-            bg="#FFFFFF"
+            card, text=f"Baterai: {initial_battery}% | {initial_status}",
+            justify=tk.LEFT, font=("Arial", 9, "bold"),
+            fg=color, bg="#FFFFFF"
         )
         live_label.pack(anchor="w")
 
@@ -942,95 +1112,146 @@ def draw_multi_results(grid, start, goal, results):
             "label": live_label,
         })
 
-        tk.Frame(
-            panel,
-            height=1,
-            bg="#D9DEE7"
-        ).pack(fill=tk.X, pady=4)
+        tk.Frame(card, height=1, bg="#D9DEE7").pack(fill=tk.X, pady=4)
 
     if not any(state["path"] for state in car_states):
         tk.Label(
-            panel,
-            text="Tidak ada algoritma yang menemukan rute.",
-            fg="white",
-            bg="#D32F2F",
-            font=("Arial", 9, "bold"),
-            padx=8,
-            pady=6
+            panel, text="Tidak ada algoritma yang menemukan rute.",
+            fg="white", bg="#D32F2F", font=("Arial", 9, "bold"),
+            padx=8, pady=6
         ).pack(fill=tk.X, pady=5)
 
-    def draw_car(state):
-        """Gambar mobil, roda, dan label baterai di atas petak saat ini."""
+    def draw_car(state, scale):
         r, c = state["position"]
         ox, oy = state["offset"]
-        cx = c * CELL_SIZE + CELL_SIZE / 2 + ox
-        cy = r * CELL_SIZE + CELL_SIZE / 2 + oy
+        cx = (c * CELL_SIZE + CELL_SIZE / 2 + ox) * scale
+        cy = (r * CELL_SIZE + CELL_SIZE / 2 + oy) * scale
         color = state["color"]
+        unit = scale
 
-        # Badge baterai tepat di atas mobil.
-        badge_text = f"{state['battery']}%"
-        badge_y = cy - 17
-
+        badge_y = cy - 17 * unit
         canvas.create_rectangle(
-            cx - 15, badge_y - 6,
-            cx + 15, badge_y + 6,
-            fill="white", outline=color, width=1,
-            tags="animated_cars"
+            cx - 15 * unit, badge_y - 6 * unit,
+            cx + 15 * unit, badge_y + 6 * unit,
+            fill="white", outline=color, width=max(1, unit)
         )
-
         canvas.create_text(
-            cx, badge_y, text=badge_text,
-            fill=color, font=("Arial", 7, "bold"),
-            tags="animated_cars"
+            cx, badge_y, text=f"{state['battery']}%", fill=color,
+            font=("Arial", max(5, int(7 * unit)), "bold")
         )
-
-        # Badan mobil.
         canvas.create_polygon(
-            cx - 9, cy - 3,
-            cx - 6, cy - 8,
-            cx + 6, cy - 8,
-            cx + 9, cy - 3,
-            cx + 9, cy + 5,
-            cx - 9, cy + 5,
-            fill=color,
-            outline="white",
-            width=1,
-            tags="animated_cars"
+            cx - 9 * unit, cy - 3 * unit,
+            cx - 6 * unit, cy - 8 * unit,
+            cx + 6 * unit, cy - 8 * unit,
+            cx + 9 * unit, cy - 3 * unit,
+            cx + 9 * unit, cy + 5 * unit,
+            cx - 9 * unit, cy + 5 * unit,
+            fill=color, outline="white", width=max(1, unit)
         )
-
-        # Kaca mobil.
         canvas.create_rectangle(
-            cx - 5, cy - 6,
-            cx + 5, cy - 3,
-            fill="#DCEBFF",
-            outline="white",
-            width=1,
-            tags="animated_cars"
+            cx - 5 * unit, cy - 6 * unit,
+            cx + 5 * unit, cy - 3 * unit,
+            fill="#DCEBFF", outline="white", width=max(1, unit)
         )
-
-        # Roda mobil.
-        for wheel_x in (cx - 6, cx + 6):
+        for wheel_x in (cx - 6 * unit, cx + 6 * unit):
             canvas.create_oval(
-                wheel_x - 2, cy + 3,
-                wheel_x + 2, cy + 7,
-                fill="#202B3C",
-                outline="white",
-                width=1,
-                tags="animated_cars"
+                wheel_x - 2 * unit, cy + 3 * unit,
+                wheel_x + 2 * unit, cy + 7 * unit,
+                fill="#202B3C", outline="white", width=max(1, unit)
             )
 
-    def refresh_cars():
-        canvas.delete("animated_cars")
+    def render_scene():
+        """Redraw all map elements at the current zoom, avoiding cumulative scaling."""
+        scale = zoom["value"]
+        cell = CELL_SIZE * scale
+        pad = max(1, PADDING * scale)
+        canvas.delete("all")
+        canvas.configure(
+            width=max(1, int(cols * cell)),
+            height=max(1, int(rows * cell)),
+            scrollregion=(0, 0, cols * cell, rows * cell)
+        )
 
+        # Base terrain.
+        for r in range(rows):
+            for c in range(cols):
+                x1 = c * cell + pad
+                y1 = r * cell + pad
+                x2 = (c + 1) * cell - pad
+                y2 = (r + 1) * cell - pad
+                draw_tile(canvas, x1, y1, x2, y2, grid[r][c],
+                          width=max(1, scale))
+
+        # Planned routes.
+        for res in results:
+            path = res.get("path", [])
+            if not path:
+                continue
+            style = ALGO_STYLES[res["name"]]
+            ox, oy = style["offset"]
+            coords = []
+            for r, c in path:
+                cx = (c * CELL_SIZE + CELL_SIZE / 2 + ox) * scale
+                cy = (r * CELL_SIZE + CELL_SIZE / 2 + oy) * scale
+                coords.extend([cx, cy])
+            if len(coords) >= 4:
+                canvas.create_line(
+                    *coords, fill=style["color"],
+                    width=max(1, 2 * scale), dash=(5, 3)
+                )
+
+        # Start and goal markers.
+        for pos, label, color in (
+            (start, "S", "#1769E0"),
+            (goal, "G", "#D92D20")
+        ):
+            r, c = pos
+            cx = (c * CELL_SIZE + CELL_SIZE / 2) * scale
+            cy = (r * CELL_SIZE + CELL_SIZE / 2) * scale
+            radius = 13 * scale
+            canvas.create_oval(
+                cx - radius, cy - radius, cx + radius, cy + radius,
+                fill="white", outline=color, width=max(1, 2 * scale)
+            )
+            canvas.create_text(
+                cx, cy, text=label, fill=color,
+                font=("Arial", max(6, int(12 * scale)), "bold")
+            )
+
+        # Current car positions and live battery badges.
         for state in car_states:
             if state["path"]:
-                draw_car(state)
+                draw_car(state, scale)
 
-    # Tampilkan semua mobil pada posisi Start.
-    refresh_cars()
+        zoom_label.config(text=f"{int(round(scale * 100))}%")
+        content.update_idletasks()
+        view.configure(scrollregion=view.bbox("all"))
+
+    def set_zoom(value):
+        zoom["value"] = max(zoom_min, min(zoom_max, round(value, 2)))
+        render_scene()
+
+    tk.Button(
+        zoom_bar, text="−", width=3, bg="white",
+        font=("Arial", 10, "bold"),
+        command=lambda: set_zoom(zoom["value"] - zoom_step)
+    ).pack(side=tk.LEFT, padx=2)
+    tk.Button(
+        zoom_bar, text="+", width=3, bg="white",
+        font=("Arial", 10, "bold"),
+        command=lambda: set_zoom(zoom["value"] + zoom_step)
+    ).pack(side=tk.LEFT, padx=2)
+    tk.Button(
+        zoom_bar, text="Reset Zoom", bg="#DCEBFF", fg="#174EA6",
+        command=lambda: set_zoom(1.0)
+    ).pack(side=tk.LEFT, padx=4)
+    tk.Label(
+        zoom_bar, text="Ctrl + + / Ctrl + - untuk zoom",
+        bg="#F4F6F9", fg="#667085", font=("Arial", 8)
+    ).pack(side=tk.LEFT, padx=8)
 
     def animate_step():
-        """Majukan semua mobil satu petak pada tick yang sama."""
+        """Majukan seluruh mobil satu petak pada tick yang sama."""
         any_active = False
 
         for state in car_states:
@@ -1049,107 +1270,99 @@ def draw_multi_results(grid, start, goal, results):
             nr, nc = next_position
             tile_cost = grid[nr][nc]
 
-            # Seharusnya algoritma tidak melewati tembok.
             if tile_cost == -1:
                 state["active"] = False
                 state["status"] = "Berhenti: menemukan tembok"
                 continue
 
-            # Tidak memasuki petak jika baterai tidak cukup.
             if state["battery"] < tile_cost:
                 state["battery"] = 0
                 state["active"] = False
                 state["status"] = "Berhenti • baterai tidak cukup"
                 continue
 
-            # Mobil berpindah dan baterai dikurangi sesuai bobot petak.
             state["step"] = next_step
             state["position"] = next_position
             state["battery"] -= tile_cost
 
             if state["battery"] == 0:
                 state["active"] = False
-
-                if next_position == goal:
-                    state["status"] = "Tiba di Goal • baterai 0%"
-                else:
-                    state["status"] = "Berhenti • baterai habis"
-
+                state["status"] = (
+                    "Tiba di Goal • baterai 0%"
+                    if next_position == goal else "Berhenti • baterai habis"
+                )
             elif next_position == goal:
                 state["active"] = False
                 state["status"] = "Tiba di Goal"
-
             else:
                 state["status"] = "Sedang berjalan"
 
-        # Update baterai dan status seluruh mobil.
         for state in car_states:
             state["label"].config(
                 text=f"Baterai: {state['battery']}% | {state['status']}"
             )
-
             if state["active"]:
                 any_active = True
 
-        refresh_cars()
+        render_scene()
 
         if any_active:
-            root.after(450, animate_step)
+            animation_job["id"] = root.after(animation_delay, animate_step)
         else:
             tk.Label(
-                panel,
-                text="Simulasi selesai.",
-                fg="#167A3E",
-                bg="#FFFFFF",
-                font=("Arial", 9, "bold")
+                panel, text="Simulasi selesai.", fg="#167A3E",
+                bg="#FFFFFF", font=("Arial", 9, "bold")
             ).pack(anchor="w", pady=(5, 2))
+            content.update_idletasks()
+            view.configure(scrollregion=view.bbox("all"))
 
-    # Tombol navigasi.
+    # Buttons remain part of the scrollable content and can be reached below.
     btn_frame = tk.Frame(panel, bg="#FFFFFF")
     btn_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
 
     tk.Button(
-        btn_frame,
-        text="🔁 Percobaan Baru (Peta Sama)",
-        bg="#25A65A",
-        fg="white",
-        font=("Arial", 9, "bold"),
+        btn_frame, text="🔁 Percobaan Baru (Peta Sama)",
+        bg="#25A65A", fg="white", font=("Arial", 9, "bold"),
         command=lambda: choose("same")
     ).pack(fill=tk.X, pady=2)
-
     tk.Button(
-        btn_frame,
-        text="🗺 Percobaan Baru (Peta Baru)",
-        bg="#2478D4",
-        fg="white",
-        font=("Arial", 9, "bold"),
+        btn_frame, text="🗺 Percobaan Baru (Peta Baru)",
+        bg="#2478D4", fg="white", font=("Arial", 9, "bold"),
         command=lambda: choose("new")
     ).pack(fill=tk.X, pady=2)
-
     tk.Button(
-        btn_frame,
-        text="Keluar",
-        bg="#D92D20",
-        fg="white",
-        font=("Arial", 9, "bold"),
-        command=lambda: choose(None)
+        btn_frame, text="Keluar", bg="#D92D20", fg="white",
+        font=("Arial", 9, "bold"), command=lambda: choose(None)
     ).pack(fill=tk.X, pady=2)
 
+    # Scroll with mouse wheel; Shift + wheel scrolls horizontally.
+    def on_mousewheel(event):
+        if event.state & 0x0001:
+            view.xview_scroll(int(-event.delta / 120), "units")
+        else:
+            view.yview_scroll(int(-event.delta / 120), "units")
+
+    root.bind_all("<MouseWheel>", on_mousewheel)
+    root.bind_all("<Button-4>", lambda event: view.yview_scroll(-3, "units"))
+    root.bind_all("<Button-5>", lambda event: view.yview_scroll(3, "units"))
+    root.bind_all("<Control-plus>", lambda event: set_zoom(zoom["value"] + zoom_step))
+    root.bind_all("<Control-equal>", lambda event: set_zoom(zoom["value"] + zoom_step))
+    root.bind_all("<Control-minus>", lambda event: set_zoom(zoom["value"] - zoom_step))
+    root.bind_all("<Control-KP_Add>", lambda event: set_zoom(zoom["value"] + zoom_step))
+    root.bind_all("<Control-KP_Subtract>", lambda event: set_zoom(zoom["value"] - zoom_step))
+
+    # Initial render and responsive window sizing.
+    render_scene()
     root.update_idletasks()
-
-    width = root.winfo_reqwidth() + 40
-    height = max(root.winfo_reqheight() + 40, 480)
-
     screen_w = root.winfo_screenwidth()
     screen_h = root.winfo_screenheight()
+    width = min(max(1000, root.winfo_reqwidth() + 30), screen_w - 40)
+    height = min(max(700, root.winfo_reqheight() + 30), screen_h - 80)
+    x = max((screen_w - width) // 2, 0)
+    y = max((screen_h - height) // 3, 0)
+    root.geometry(f"{width}x{height}+{x}+{y}")
+    root.minsize(min(750, screen_w - 40), min(500, screen_h - 80))
 
-    root.geometry(
-        f"{min(width, screen_w - 40)}x{min(height, screen_h - 80)}"
-    )
-
-    # Mulai animasi setelah window tampil.
     root.after(700, animate_step)
-
     root.mainloop()
-
     return action["value"]
