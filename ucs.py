@@ -24,8 +24,8 @@ def run_ucs(grid, start, goal):
 
         # Jika sampai di tujuan, rekonstruksi jalur lalu kembalikan
         if (r, c) == goal:
-            return current_cost, _build_path(came_from, start, goal)
-
+            return current_cost, _build_path(came_from, start, goal), len(min_costs)
+        
         # Abaikan entri basi di antrean
         if current_cost > min_costs.get((r, c), float('inf')):
             continue
@@ -43,7 +43,7 @@ def run_ucs(grid, start, goal):
                     came_from[(nr, nc)] = (r, c)
                     heapq.heappush(pq, (new_cost, nr, nc))
 
-    return float('inf'), []  # Jika jalur tidak ditemukan
+    return float('inf'), [], len(min_costs)  # Jika jalur tidak ditemukan  # Jika jalur tidak ditemukan
 
 
 def _build_path(came_from, start, goal):

@@ -14,16 +14,16 @@ COLORS = {
 CELL_SIZE = 50
 PADDING = 4
 
-# Daftar algoritma yang bisa dipilih user di menu
-ALGORITHMS = {
-    "Dijkstra": "dijkstra",
-    "UCS (Uniform Cost Search)": "ucs",
+# Konfigurasi Algoritma: Nama -> (Kode, Warna Garis/Titik, Offset Koordinat agar tidak bertumpuk)
+ALGO_STYLES = {
+    "UCS (Uniform Cost Search)": {"color": "#00C853", "offset": (-6, -6)},  # Hijau Zamrud   
+    "BFS (Breadth-First Search)":{"color": "#FF6D00", "offset": (-6, 6)},   # Oranye
+    "DFS (Depth-First Search)":  {"color": "#AA00FF", "offset": (6, 6)},    # Ungu
 }
-DEFAULT_ALGORITHM = "Dijkstra"
 
-# Ukuran area layar minimum agar tombol toolbar tidak terpotong
-MIN_WINDOW_WIDTH = 900
-MIN_WINDOW_HEIGHT = 700
+MIN_WINDOW_WIDTH = 950
+MIN_WINDOW_HEIGHT = 720
+
 
 class GridConfigurator:
     def __init__(self, root, rows, cols):
@@ -33,105 +33,89 @@ class GridConfigurator:
         self.rows = rows
         self.cols = cols
 
-        # Inisialisasi grid default (semua normal / 1)
         self.grid = [[1 for _ in range(cols)] for _ in range(rows)]
-        self.start_pos = (rows - 1, 0) # Default pojok kiri bawah
-        self.goal_pos = (0, cols - 1)  # Default pojok kanan atas
+        self.start_pos = (rows - 1, 0)
+        self.goal_pos = (0, cols - 1)
+        self.mode = 1
 
-        self.mode = 1  # 1: Normal, 3: Tanjakan, 5: Macet, -1: Tembok, 'S': Start, 'G': Goal
+        # Variabel Checkbutton untuk tiap algoritma (Default: UCS & BFS aktif)
+        self.algo_vars = {}
+        for idx, name in enumerate(ALGO_STYLES.keys()):
+            self.algo_vars[name] = tk.BooleanVar(value=(name in ["UCS (Uniform Cost Search)", "BFS (Breadth-First Search)"]))
 
-        # Algoritma yang dipilih user (diisi lewat menu di bawah)
-        self.algorithm = DEFAULT_ALGORITHM
+        self.selected_algorithms = []
 
-        self._build_menu()
-
-        # Frame Kontrol Pilihan
+        # --- BARIS 1: Kontrol Alat Edit Peta ---
         self.control_frame = tk.Frame(root)
-        self.control_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
+        self.control_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=(10, 5))
 
-        tk.Label(self.control_frame, text="Pilih Alat Edit:", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=5)
+        tk.Label(self.control_frame, text="Alat Edit:", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=5)
 
-        self.btn_normal = tk.Button(self.control_frame, text="Normal (1)", bg=COLORS[1], command=lambda: self.set_mode(1))
-        self.btn_normal.pack(side=tk.LEFT, padx=2)
+        tk.Button(self.control_frame, text="Normal (1)", bg=COLORS[1], command=lambda: self.set_mode(1)).pack(side=tk.LEFT, padx=2)
+        tk.Button(self.control_frame, text="Tanjakan (3)", bg=COLORS[3], fg="white", command=lambda: self.set_mode(3)).pack(side=tk.LEFT, padx=2)
+        tk.Button(self.control_frame, text="Macet (5)", bg=COLORS[5], command=lambda: self.set_mode(5)).pack(side=tk.LEFT, padx=2)
+        tk.Button(self.control_frame, text="Tembok (-1)", bg=COLORS[-1], fg="white", command=lambda: self.set_mode(-1)).pack(side=tk.LEFT, padx=2)
 
-        self.btn_tanjakan = tk.Button(self.control_frame, text="Tanjakan (3)", bg=COLORS[3], fg="white", command=lambda: self.set_mode(3))
-        self.btn_tanjakan.pack(side=tk.LEFT, padx=2)
+        tk.Label(self.control_frame, text=" | ").pack(side=tk.LEFT)
 
-        self.btn_macet = tk.Button(self.control_frame, text="Macet (5)", bg=COLORS[5], command=lambda: self.set_mode(5))
-        self.btn_macet.pack(side=tk.LEFT, padx=2)
+        tk.Button(self.control_frame, text="Set Start (S)", bg="lightblue", command=lambda: self.set_mode('S')).pack(side=tk.LEFT, padx=2)
+        tk.Button(self.control_frame, text="Set Goal (G)", bg="lightcoral", command=lambda: self.set_mode('G')).pack(side=tk.LEFT, padx=2)
 
-        self.btn_tembok = tk.Button(self.control_frame, text="Tembok (-1)", bg=COLORS[-1], fg="white", command=lambda: self.set_mode(-1))
-        self.btn_tembok.pack(side=tk.LEFT, padx=2)
+        tk.Label(self.control_frame, text=" | ").pack(side=tk.LEFT)
 
-        tk.Label(self.control_frame, text=" | ", font=("Arial", 10)).pack(side=tk.LEFT)
+        tk.Button(self.control_frame, text="Acak Grid", bg="khaki", command=self.randomize_grid).pack(side=tk.LEFT, padx=2)
+        tk.Button(self.control_frame, text="Reset", bg="white", command=self.reset_grid).pack(side=tk.LEFT, padx=2)
 
-        self.btn_start = tk.Button(self.control_frame, text="Set Start (S)", bg="lightblue", command=lambda: self.set_mode('S'))
-        self.btn_start.pack(side=tk.LEFT, padx=2)
-
-        self.btn_goal = tk.Button(self.control_frame, text="Set Goal (G)", bg="lightcoral", command=lambda: self.set_mode('G'))
-        self.btn_goal.pack(side=tk.LEFT, padx=2)
-
-        tk.Label(self.control_frame, text=" | ", font=("Arial", 10)).pack(side=tk.LEFT)
-
-        # Randomization
-        self.btn_random = tk.Button(self.control_frame, text="Acak Grid", bg="khaki", command=self.randomize_grid)
-        self.btn_random.pack(side=tk.LEFT, padx=2)
-
-        self.btn_reset = tk.Button(self.control_frame, text="Reset", bg="white", command=self.reset_grid)
-        self.btn_reset.pack(side=tk.LEFT, padx=2)
-
-        tk.Label(self.control_frame, text="Tembok %:", font=("Arial", 10)).pack(side=tk.LEFT, padx=(10, 2))
+        tk.Label(self.control_frame, text="Tembok %:").pack(side=tk.LEFT, padx=(8, 2))
         self.wall_ratio_var = tk.IntVar(value=20)
-        self.wall_spin = tk.Spinbox(self.control_frame, from_=0, to=60, width=4, textvariable=self.wall_ratio_var)
-        self.wall_spin.pack(side=tk.LEFT, padx=2)
+        tk.Spinbox(self.control_frame, from_=0, to=60, width=4, textvariable=self.wall_ratio_var).pack(side=tk.LEFT, padx=2)
 
-        # Canvas untuk Grid
+        # --- BARIS 2: Pilihan Multi-Algoritma (Checkbox) ---
+        self.algo_frame = tk.Frame(root, relief=tk.GROOVE, borderwidth=1, padx=8, pady=6)
+        self.algo_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
+
+        tk.Label(self.algo_frame, text="Pilih Algoritma (Min. 1):", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=5)
+
+        for name, style in ALGO_STYLES.items():
+            cb = tk.Checkbutton(
+                self.algo_frame,
+                text=name,
+                variable=self.algo_vars[name],
+                fg=style["color"],
+                font=("Arial", 9, "bold"),
+                activeforeground=style["color"]
+            )
+            cb.pack(side=tk.LEFT, padx=8)
+
+        # --- CANVAS GRID ---
         self.canvas = tk.Canvas(root, width=cols * CELL_SIZE, height=rows * CELL_SIZE, bg="white")
         self.canvas.pack(padx=10, pady=10)
         self.canvas.bind("<Button-1>", self.on_cell_click)
 
-        # Tombol Selesai / Submit Konfigurasi
-        self.btn_done = tk.Button(root, text="Selesai & Jalankan Simulasi", bg="lightgreen", font=("Arial", 11, "bold"), command=self.finish_config)
+        # --- TOMBOL START ---
+        self.btn_done = tk.Button(
+            root,
+            text="▶ Start Simulasi",
+            bg="#4CAF50",
+            fg="white",
+            font=("Arial", 11, "bold"),
+            padx=15,
+            pady=5,
+            command=self.finish_config
+        )
         self.btn_done.pack(side=tk.BOTTOM, pady=10)
 
-        # Beri ruang lega: batas minimum window & posisi di tengah layar
         self._setup_window_size()
-
         self.draw_grid()
 
-    def _build_menu(self):
-        """Membuat menubar dengan pilihan algoritma pathfinding."""
-        menubar = tk.Menu(self.root)
-
-        self.algorithm_var = tk.StringVar(master=self.root, value=self.algorithm)
-        algo_menu = tk.Menu(menubar, tearoff=0)
-        for name in ALGORITHMS:
-            algo_menu.add_radiobutton(
-                label=name,
-                value=name,
-                variable=self.algorithm_var,
-                command=lambda n=name: self.set_algorithm(n),
-            )
-        menubar.add_cascade(label="Algoritma", menu=algo_menu)
-
-        self.root.config(menu=menubar)
-
-    def set_algorithm(self, name):
-        self.algorithm = name
-        self.algorithm_var.set(name)
-        self.root.title(f"EV Navigation - Custom Grid Configurator [{name}]")
-
     def _setup_window_size(self):
-        """Memperbesar window agar konten tidak mepet dengan tepi layar."""
         self.root.update_idletasks()
-
         width = max(self.root.winfo_reqwidth(), MIN_WINDOW_WIDTH)
         height = max(self.root.winfo_reqheight(), MIN_WINDOW_HEIGHT)
 
         screen_w = self.root.winfo_screenwidth()
         screen_h = self.root.winfo_screenheight()
 
-        # Jangan melebihi area layar yang tersedia
         width = min(width, screen_w - 40)
         height = min(height, screen_h - 80)
 
@@ -151,8 +135,6 @@ class GridConfigurator:
     def randomize_grid(self, max_attempts=30):
         wall_ratio = max(0, min(self.wall_ratio_var.get(), 60)) / 100.0
         protected = {self.start_pos, self.goal_pos}
-
-        # Bobot relatif terrain non-tembok: Normal paling dominan.
         terrain_pool = [1, 1, 1, 3, 5]
 
         new_grid = self.grid
@@ -175,7 +157,6 @@ class GridConfigurator:
 
     def _is_reachable(self, grid):
         from collections import deque
-
         seen = {self.start_pos}
         queue = deque([self.start_pos])
         while queue:
@@ -226,7 +207,6 @@ class GridConfigurator:
                     return
                 self.goal_pos = (r, c)
             else:
-                # Ubah terrain, pastikan Start/Goal tidak berubah jadi tembok
                 if (r, c) == self.start_pos or (r, c) == self.goal_pos:
                     if self.mode == -1:
                         messagebox.showerror("Error", "Petak Start atau Goal tidak bisa diubah menjadi Tembok!")
@@ -236,49 +216,60 @@ class GridConfigurator:
             self.draw_grid()
 
     def finish_config(self):
-        # Validasi akhir
         if self.start_pos == self.goal_pos:
             messagebox.showerror("Error", "Titik Start dan Goal tidak boleh di koordinat yang sama!")
             return
+
+        # Validasi: Minimal 1 algoritma harus dipilih
+        chosen = [name for name, var in self.algo_vars.items() if var.get()]
+        if not chosen:
+            messagebox.showwarning("Peringatan", "Pilih minimal satu algoritma sebelum memulai simulasi!")
+            return
+
+        self.selected_algorithms = chosen
         self.root.destroy()
 
 
 def get_env():
     """Meminta input ukuran grid dari user, lalu membuka UI interaktif."""
     root = tk.Tk()
-    root.withdraw() # Sembunyikan window utama sementara
+    root.withdraw()
 
-    # Input ukuran grid via Dialog Box (tanpa minwidth & maxwidth)
-    cols = simpledialog.askinteger("Input Grid", "Masukkan jumlah Kolom (lebar, misal: 6-10):", initialvalue=8, minvalue=3, maxvalue=20)
-    rows = simpledialog.askinteger("Input Grid", "Masukkan jumlah Baris (tinggi, misal: 6-10):", initialvalue=8, minvalue=3, maxvalue=20)
+    cols = simpledialog.askinteger("Input Grid", "Masukkan jumlah Kolom (lebar, misal: 6-12):", initialvalue=8, minvalue=3, maxvalue=20)
+    rows = simpledialog.askinteger("Input Grid", "Masukkan jumlah Baris (tinggi, misal: 6-12):", initialvalue=8, minvalue=3, maxvalue=20)
 
     if not cols or not rows:
-        cols, rows = 8, 8 # Default aman jika dibatalkan
+        cols, rows = 8, 8
 
     root.destroy()
 
-    # Buka jendela konfigurasi interaktif
     config_root = tk.Tk()
     app = GridConfigurator(config_root, rows, cols)
     config_root.mainloop()
 
-    return app.grid, app.start_pos, app.goal_pos, app.algorithm
+    return app.grid, app.start_pos, app.goal_pos, app.selected_algorithms
 
 
-def draw_map(grid, start, goal, optimal_path=None, algorithm=DEFAULT_ALGORITHM,
-             total_cost=None):
-    """Menampilkan hasil akhir rute optimal pada peta 2D."""
-    optimal_path = optimal_path or []
-
+def draw_multi_results(grid, start, goal, results):
+    """
+    Menampilkan semua rute dari algoritma yang dipilih pada satu peta 2D
+    dengan garis warna berbeda & panel legenda perbandingan.
+    
+    results: list of dict -> [
+        {"name": str, "cost": float, "path": list, "visited": int, "time_ms": float}, ...
+    ]
+    """
     root = tk.Tk()
-    root.title(f"EV Navigation - Hasil Rute Optimal ({algorithm})")
+    root.title("EV Navigation - Hasil Perbandingan Rute")
+
+    main_frame = tk.Frame(root)
+    main_frame.pack(padx=15, pady=15)
 
     rows, cols = len(grid), len(grid[0])
-    canvas = tk.Canvas(root, width=cols * CELL_SIZE, height=rows * CELL_SIZE, bg="white")
-    canvas.pack(padx=10, pady=10)
+    canvas = tk.Canvas(main_frame, width=cols * CELL_SIZE, height=rows * CELL_SIZE, bg="white")
+    canvas.pack(side=tk.LEFT, padx=(0, 15))
 
-    path_set = set(optimal_path)
-
+    # 1. Gambar Grid Dasar
     for r in range(rows):
         for c in range(cols):
             val = grid[r][c]
@@ -291,29 +282,76 @@ def draw_map(grid, start, goal, optimal_path=None, algorithm=DEFAULT_ALGORITHM,
 
             canvas.create_rectangle(x1, y1, x2, y2, fill=color, outline="black", width=1)
 
-            pos = (r, c)
-            if pos == start:
-                canvas.create_text((x1+x2)/2, (y1+y2)/2, text="S", fill="blue", font=("Arial", 16, "bold"))
-            elif pos == goal:
-                canvas.create_text((x1+x2)/2, (y1+y2)/2, text="G", fill="red", font=("Arial", 16, "bold"))
-            elif pos in path_set:
-                canvas.create_text((x1+x2)/2, (y1+y2)/2, text="*", fill="gold", font=("Arial", 22, "bold"))
+    # 2. Gambar Garis Rute untuk Masing-Masing Algoritma (dengan sedikit offset)
+    for res in results:
+        path = res["path"]
+        if not path:
+            continue
 
-    # Ringkasan hasil di bawah peta
-    summary = f"Algoritma: {algorithm}"
-    if total_cost is not None:
-        summary += f"   |   Total Konsumsi Baterai: {total_cost}%"
-        summary += f"   |   Panjang Rute: {len(optimal_path)} petak"
-    tk.Label(root, text=summary, font=("Arial", 11, "bold")).pack(pady=(0, 12))
+        style = ALGO_STYLES[res["name"]]
+        line_color = style["color"]
+        ox, oy = style["offset"]
 
-    # Beri ruang lega di sekitar peta
+        coords = []
+        for (r, c) in path:
+            cx = c * CELL_SIZE + (CELL_SIZE / 2) + ox
+            cy = r * CELL_SIZE + (CELL_SIZE / 2) + oy
+            coords.extend([cx, cy])
+
+            # Titik kecil di tiap langkah
+            canvas.create_oval(cx - 3.5, cy - 3.5, cx + 3.5, cy + 3.5, fill=line_color, outline="")
+
+        # Garis penghubung rute
+        if len(coords) >= 4:
+            canvas.create_line(*coords, fill=line_color, width=3, smooth=False)
+
+    # 3. Gambar Label S dan G di layer paling atas agar tidak tertutup garis
+    for pos, label, fg_color in [(start, "S", "blue"), (goal, "G", "red")]:
+        r, c = pos
+        cx = c * CELL_SIZE + (CELL_SIZE / 2)
+        cy = r * CELL_SIZE + (CELL_SIZE / 2)
+        canvas.create_oval(cx - 14, cy - 14, cx + 14, cy + 14, fill="white", outline=fg_color, width=2)
+        canvas.create_text(cx, cy, text=label, fill=fg_color, font=("Arial", 14, "bold"))
+
+    # 4. Panel Legenda & Tabel Metrik di Sebelah Kanan Peta
+    legend_frame = tk.Frame(main_frame, relief=tk.RIDGE, borderwidth=2, padx=12, pady=12)
+    legend_frame.pack(side=tk.RIGHT, fill=tk.Y)
+
+    tk.Label(legend_frame, text="Hasil & Perbandingan Algoritma", font=("Arial", 12, "bold")).pack(anchor="w", pady=(0, 10))
+
+    for res in results:
+        name = res["name"]
+        color = ALGO_STYLES[name]["color"]
+
+        card = tk.Frame(legend_frame, pady=6)
+        card.pack(fill=tk.X, anchor="w")
+
+        # Header warna + nama algoritma
+        header = tk.Frame(card)
+        header.pack(anchor="w")
+        tk.Label(header, text="■■", fg=color, font=("Arial", 12, "bold")).pack(side=tk.LEFT)
+        tk.Label(header, text=f" {name}", font=("Arial", 10, "bold")).pack(side=tk.LEFT)
+
+        # Detail Statistik
+        if res["path"]:
+            detail = (
+                f"   • Konsumsi Baterai : {res['cost']}%\n"
+                f"   • Panjang Rute      : {len(res['path'])} petak\n"
+                f"   • Node Dieksplorasi : {res['visited']} node\n"
+                f"   • Waktu Komputasi   : {res['time_ms']:.2f} ms"
+            )
+        else:
+            detail = "   • Status: Jalur tidak ditemukan"
+
+        tk.Label(card, text=detail, justify=tk.LEFT, font=("Consolas", 9)).pack(anchor="w")
+        tk.Frame(legend_frame, height=1, bg="#CCCCCC").pack(fill=tk.X, pady=4)
+
+    # Atur ukuran window otomatis menyesuaikan konten
     root.update_idletasks()
-    width = max(root.winfo_reqwidth() + 120, MIN_WINDOW_WIDTH // 2 + 260)
-    height = max(root.winfo_reqheight() + 120, MIN_WINDOW_HEIGHT // 2)
+    width = root.winfo_reqwidth() + 40
+    height = max(root.winfo_reqheight() + 40, 480)
     screen_w = root.winfo_screenwidth()
     screen_h = root.winfo_screenheight()
-    width = min(width, screen_w - 40)
-    height = min(height, screen_h - 80)
-    root.geometry(f"{width}x{height}+{max((screen_w - width) // 2, 0)}+{max((screen_h - height) // 3, 0)}")
+    root.geometry(f"{min(width, screen_w - 40)}x{min(height, screen_h - 80)}")
 
     root.mainloop()
