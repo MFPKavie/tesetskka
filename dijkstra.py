@@ -1,4 +1,3 @@
-# dijkstra.py
 import heapq
 
 def run_dijkstra(grid, start, goal):
