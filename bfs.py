@@ -1,4 +1,3 @@
-# bfs.py
 from collections import deque
 
 
