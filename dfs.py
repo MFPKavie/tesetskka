@@ -1,6 +1,3 @@
-# dfs.py
-
-
 def run_dfs(grid, start, goal):
     rows, cols = len(grid), len(grid[0])
     stack = [(start[0], start[1], 0)]  # (row, col, accumulated_battery_cost)
