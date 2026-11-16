@@ -278,13 +278,13 @@ class GridConfigurator:
             )
         )
 
-        # Mouse wheel Windows
+
         self.outer_canvas.bind_all(
             "<MouseWheel>",
             self._on_mousewheel
         )
 
-        # Mouse wheel Linux
+    
         self.outer_canvas.bind_all(
             "<Button-4>",
             lambda event: self.outer_canvas.yview_scroll(-3, "units")
