@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EV Route Search</title>
+  <style>
+    :root { font: 16px/1.5 system-ui, sans-serif; color: #172033; background: #f4f6fa; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 40px 18px; }
+    main { max-width: 940px; margin: auto; }
+    h1 { margin-bottom: 4px; letter-spacing: -.03em; }
+    header p, .hint { color: #667085; }
+    .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 24px; }
+    section { background: white; border: 1px solid #e1e5ec; border-radius: 14px; padding: 20px; }
+    h2 { font-size: 17px; margin: 0 0 14px; }
+    label { display: block; margin: 12px 0 5px; font-size: 14px; font-weight: 650; }
+    textarea, input, select { width: 100%; border: 1px solid #cbd2dd; border-radius: 8px; padding: 10px; font: inherit; background: white; }
+    textarea { min-height: 130px; resize: vertical; font: 13px/1.5 ui-monospace, monospace; }
+    .coordinates { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    button { width: 100%; margin-top: 18px; border: 0; border-radius: 8px; padding: 12px; color: white; background: #245edb; font: inherit; font-weight: 700; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: wait; }
+    .hint { margin: 6px 0; font-size: 12px; }
+    #result { color: #475467; }
+    #map { display: grid; gap: 4px; overflow-x: auto; margin-top: 14px; }
+    .cell { min-width: 24px; aspect-ratio: 1; display: grid; place-items: center; border-radius: 4px; background: #e8ebf0; font-size: 12px; font-weight: 700; }
+    .wall { background: #303943; } .hill { background: #cce4ff; } .traffic { background: #ffe0dc; }
+    .route { box-shadow: inset 0 0 0 3px #21a366; } .start { color: #155eef; } .goal { color: #b42318; }
+    .error { color: #b42318 !important; }
+    @media (max-width: 700px) { body { padding: 24px 12px; } .columns { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>EV Route Search</h1>
+      <p>Run the repository’s BFS, DFS, or Uniform Cost Search algorithm on a custom grid.</p>
+    </header>
+    <div class="columns">
+      <section>
+        <h2>Configure a search</h2>
+        <form id="form">
+          <label for="grid">Grid</label>
+          <textarea id="grid" required>[[1,1,3,1,1],[1,-1,3,-1,1],[1,1,1,1,1],[5,-1,1,-1,1],[1,1,1,1,1]]</textarea>
+          <p class="hint">1 = road, 3 = hill, 5 = traffic, -1 = wall</p>
+          <div class="coordinates">
+            <div><label for="start">Start [row, column]</label><input id="start" value="[4,0]" required></div>
+            <div><label for="goal">Goal [row, column]</label><input id="goal" value="[0,4]" required></div>
+          </div>
+          <label for="algorithm">Algorithm</label>
+          <select id="algorithm"><option value="ucs">Uniform Cost Search</option><option value="bfs">Breadth-First Search</option><option value="dfs">Depth-First Search</option></select>
+          <button id="run">Find route</button>
+        </form>
+      </section>
+      <section>
+        <h2>Result</h2>
+        <div id="result">Enter a grid and run a search to see its route.</div>
+      </section>
+    </div>
+  </main>
+  <script>
+    const form = document.querySelector('#form');
+    const result = document.querySelector('#result');
+    const runButton = document.querySelector('#run');
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      runButton.disabled = true;
+      runButton.textContent = 'Searching…';
+      result.className = '';
+      result.textContent = 'Searching…';
+      try {
+        const input = {
+          grid: JSON.parse(document.querySelector('#grid').value),
+          start: JSON.parse(document.querySelector('#start').value),
+          goal: JSON.parse(document.querySelector('#goal').value),
+          algorithm: document.querySelector('#algorithm').value
+        };
+        const response = await fetch('/api', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Request failed.');
+        showResult(data, input);
+      } catch (error) {
+        result.className = 'error';
+        result.textContent = error instanceof SyntaxError ? 'Grid and coordinates must be valid JSON.' : error.message;
+      } finally {
+        runButton.disabled = false;
+        runButton.textContent = 'Find route';
+      }
+    });
+    function showResult(data, input) {
+      result.replaceChildren();
+      if (!data.path.length) {
+        result.className = '';
+        result.textContent = `No route found. ${data.visited} nodes visited.`;
+        return;
+      }
+      result.className = '';
+      const summary = document.createElement('p');
+      summary.textContent = `${data.algorithm.toUpperCase()} · Battery cost ${data.cost}% · ${data.visited} nodes visited · ${data.path.length} cells in path`;
+      const path = new Set(data.path.map(point => point.join(',')));
+      const map = document.createElement('div');
+      map.id = 'map';
+      map.style.gridTemplateColumns = `repeat(${input.grid[0].length}, minmax(24px, 44px))`;
+      input.grid.forEach((row, r) => row.forEach((value, c) => {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.textContent = value === -1 ? '' : String(value);
+        if (value === -1) cell.classList.add('wall');
+        if (value === 3) cell.classList.add('hill');
+        if (value === 5) cell.classList.add('traffic');
+        if (path.has(`${r},${c}`)) cell.classList.add('route');
+        if (r === input.start[0] && c === input.start[1]) { cell.classList.add('start'); cell.textContent = 'S'; }
+        if (r === input.goal[0] && c === input.goal[1]) { cell.classList.add('goal'); cell.textContent = 'G'; }
+        map.append(cell);
+      }));
+      result.append(summary, map);
+    }
+  </script>
+</body>
+</html>
