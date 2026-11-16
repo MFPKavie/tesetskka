@@ -763,9 +763,7 @@ def get_env(initial=None):
 
 
 def draw_multi_results(grid, start, goal, results):
-
-    """Menampilkan rute algoritma terpilih di atas grid."""
-
+    """Menampilkan rute dan menggerakkan semua mobil secara bersamaan."""
     action = {"value": None}
 
     def choose(value):
@@ -773,20 +771,13 @@ def draw_multi_results(grid, start, goal, results):
         root.destroy()
 
     root = tk.Tk()
-
-    root.title("EV Navigation - Hasil Perbandingan Rute")
+    root.title("EV Navigation - Simulasi Pergerakan Kendaraan")
     root.configure(bg="#F4F6F9")
 
-    main_frame = tk.Frame(
-        root,
-        bg="#F4F6F9"
-    )
-
+    main_frame = tk.Frame(root, bg="#F4F6F9")
     main_frame.pack(padx=15, pady=15)
 
-    rows = len(grid)
-    cols = len(grid[0])
-
+    rows, cols = len(grid), len(grid[0])
     canvas = tk.Canvas(
         main_frame,
         width=cols * CELL_SIZE,
@@ -794,229 +785,335 @@ def draw_multi_results(grid, start, goal, results):
         bg="white",
         highlightthickness=0
     )
+    canvas.pack(side=tk.LEFT, padx=(0, 15), anchor="n")
 
-    canvas.pack(
-        side=tk.LEFT,
-        padx=(0, 15),
-        anchor="n"
-    )
-
-    # GRID DASAR
+    # Gambar grid dasar.
     for r in range(rows):
         for c in range(cols):
-
-            value = grid[r][c]
-
             x1 = c * CELL_SIZE + PADDING
             y1 = r * CELL_SIZE + PADDING
             x2 = (c + 1) * CELL_SIZE - PADDING
             y2 = (r + 1) * CELL_SIZE - PADDING
+            draw_tile(canvas, x1, y1, x2, y2, grid[r][c])
 
-            draw_tile(
-                canvas,
-                x1, y1, x2, y2,
-                value
-            )
-
-    # GAMBAR RUTE ALGORITMA
+    # Gambar jalur masing-masing algoritma sebagai panduan.
     for res in results:
-
-        path = res["path"]
-
+        path = res.get("path", [])
         if not path:
             continue
 
         style = ALGO_STYLES[res["name"]]
-
-        line_color = style["color"]
         ox, oy = style["offset"]
-
         coords = []
 
         for r, c in path:
-
-            cx = c * CELL_SIZE + (CELL_SIZE / 2) + ox
-            cy = r * CELL_SIZE + (CELL_SIZE / 2) + oy
-
+            cx = c * CELL_SIZE + CELL_SIZE / 2 + ox
+            cy = r * CELL_SIZE + CELL_SIZE / 2 + oy
             coords.extend([cx, cy])
 
-            canvas.create_oval(
-                cx - 3.5,
-                cy - 3.5,
-                cx + 3.5,
-                cy + 3.5,
-                fill=line_color,
-                outline=""
-            )
-
         if len(coords) >= 4:
-
             canvas.create_line(
                 *coords,
-                fill=line_color,
-                width=3,
-                smooth=False
+                fill=style["color"],
+                width=2,
+                dash=(5, 3),
+                tags="route_lines"
             )
 
-    # LABEL START DAN GOAL
-    for pos, label, color in [
+    # Penanda Start dan Goal.
+    for pos, label, color in (
         (start, "S", "#1769E0"),
         (goal, "G", "#D92D20")
-    ]:
-
+    ):
         r, c = pos
-
         cx = c * CELL_SIZE + CELL_SIZE / 2
         cy = r * CELL_SIZE + CELL_SIZE / 2
-
         canvas.create_oval(
-            cx - 14,
-            cy - 14,
-            cx + 14,
-            cy + 14,
-            fill="white",
-            outline=color,
-            width=2
+            cx - 13, cy - 13, cx + 13, cy + 13,
+            fill="white", outline=color, width=2,
+            tags="start_goal"
         )
-
         canvas.create_text(
-            cx,
-            cy,
-            text=label,
-            fill=color,
-            font=("Arial", 14, "bold")
+            cx, cy, text=label, fill=color,
+            font=("Arial", 12, "bold"),
+            tags="start_goal"
         )
 
-    # PANEL HASIL PERBANDINGAN
-    legend_frame = tk.Frame(
+    # Panel hasil dan status baterai realtime.
+    panel = tk.Frame(
         main_frame,
-        relief=tk.RIDGE,
+        relief=tk.GROOVE,
         borderwidth=1,
         padx=12,
         pady=12,
         bg="#FFFFFF"
     )
-
-    legend_frame.pack(
-        side=tk.RIGHT,
-        fill=tk.Y,
-        anchor="n"
-    )
+    panel.pack(side=tk.RIGHT, fill=tk.Y, anchor="n")
 
     tk.Label(
-        legend_frame,
+        panel,
         text="Hasil & Perbandingan Algoritma",
         font=("Arial", 12, "bold"),
         bg="#FFFFFF"
-    ).pack(anchor="w", pady=(0, 10))
+    ).pack(anchor="w", pady=(0, 8))
 
-    if not any(res["path"] for res in results):
+    tk.Label(
+        panel,
+        text="Mobil bergerak bersamaan • 1 langkah = 450 ms",
+        font=("Arial", 8),
+        fg="#667085",
+        bg="#FFFFFF"
+    ).pack(anchor="w", pady=(0, 8))
 
-        tk.Label(
-            legend_frame,
-            text="Tidak ada rute yang dapat mencapai tujuan!",
-            fg="white",
-            bg="#D32F2F",
-            font=("Arial", 10, "bold"),
-            justify=tk.LEFT,
-            padx=10,
-            pady=8
-        ).pack(fill=tk.X, pady=(0, 10))
+    # State animasi disimpan terpisah untuk setiap algoritma.
+    car_states = []
 
-    for res in results:
+    # Offset mobil agar tidak bertumpuk saat berada di petak sama.
+    car_offsets = [(-10, -9), (10, -9), (0, 10)]
 
+    for index, res in enumerate(results):
         name = res["name"]
         color = ALGO_STYLES[name]["color"]
+        path = res.get("path", [])
+        initial_battery = int(res.get("battery", 100))
 
-        card = tk.Frame(
-            legend_frame,
-            pady=6,
-            bg="#FFFFFF"
-        )
-
+        card = tk.Frame(panel, bg="#FFFFFF", pady=5)
         card.pack(fill=tk.X, anchor="w")
 
-        header = tk.Frame(
-            card,
-            bg="#FFFFFF"
-        )
-
+        header = tk.Frame(card, bg="#FFFFFF")
         header.pack(anchor="w")
 
         tk.Label(
-            header,
-            text="●",
-            fg=color,
-            bg="#FFFFFF",
+            header, text="●", fg=color, bg="#FFFFFF",
             font=("Arial", 12, "bold")
         ).pack(side=tk.LEFT)
 
         tk.Label(
-            header,
-            text=f" {name}",
-            bg="#FFFFFF",
-            font=("Arial", 10, "bold")
+            header, text=f" {name}", bg="#FFFFFF",
+            font=("Arial", 9, "bold")
         ).pack(side=tk.LEFT)
 
-        if res["path"]:
-
+        if path:
+            planned_cost = sum(grid[r][c] for r, c in path[1:])
             detail = (
-                f"   • Baterai Awal      : {res['battery']}%\n"
-                f"   • Konsumsi Baterai  : {res['cost']}%\n"
-                f"   • Sisa Baterai      : {res['remaining']}%\n"
-                f"   • Panjang Rute      : {len(res['path'])} petak\n"
-                f"   • Node Dieksplorasi : {res['visited']} node\n"
-                f"   • Waktu             : {res['time_ms']:.2f} ms"
+                f"Rute: {len(path)} petak | "
+                f"Estimasi konsumsi: {planned_cost}%\n"
+                f"Node dieksplorasi: {res.get('visited', 0)} | "
+                f"Waktu pencarian: {res.get('time_ms', 0):.2f} ms"
             )
-
+            current_position = path[0]
+            active = len(path) > 1
+            initial_status = "Menunggu pergerakan" if active else "Sudah di tujuan"
         else:
-
-            detail = "   • Status: Jalur tidak ditemukan"
+            detail = "Rute tidak ditemukan oleh algoritma ini."
+            current_position = start
+            active = False
+            initial_status = "Rute tidak ditemukan"
 
         tk.Label(
             card,
             text=detail,
             justify=tk.LEFT,
-            font=("Consolas", 9),
+            font=("Consolas", 8),
+            bg="#FFFFFF",
+            fg="#475467"
+        ).pack(anchor="w", pady=(3, 2))
+
+        live_label = tk.Label(
+            card,
+            text=f"Baterai: {initial_battery}% | {initial_status}",
+            justify=tk.LEFT,
+            font=("Arial", 9, "bold"),
+            fg=color,
             bg="#FFFFFF"
-        ).pack(anchor="w")
+        )
+        live_label.pack(anchor="w")
+
+        car_states.append({
+            "name": name,
+            "color": color,
+            "path": path,
+            "step": 0,
+            "battery": initial_battery,
+            "position": current_position,
+            "active": active,
+            "status": initial_status,
+            "offset": car_offsets[index % len(car_offsets)],
+            "label": live_label,
+        })
 
         tk.Frame(
-            legend_frame,
+            panel,
             height=1,
             bg="#D9DEE7"
         ).pack(fill=tk.X, pady=4)
 
-        if res["path"] and not res["enough"]:
+    if not any(state["path"] for state in car_states):
+        tk.Label(
+            panel,
+            text="Tidak ada algoritma yang menemukan rute.",
+            fg="white",
+            bg="#D32F2F",
+            font=("Arial", 9, "bold"),
+            padx=8,
+            pady=6
+        ).pack(fill=tk.X, pady=5)
 
+    def draw_car(state):
+        """Gambar mobil, roda, dan label baterai di atas petak saat ini."""
+        r, c = state["position"]
+        ox, oy = state["offset"]
+        cx = c * CELL_SIZE + CELL_SIZE / 2 + ox
+        cy = r * CELL_SIZE + CELL_SIZE / 2 + oy
+        color = state["color"]
+
+        # Badge baterai tepat di atas mobil.
+        badge_text = f"{state['battery']}%"
+        badge_y = cy - 17
+
+        canvas.create_rectangle(
+            cx - 15, badge_y - 6,
+            cx + 15, badge_y + 6,
+            fill="white", outline=color, width=1,
+            tags="animated_cars"
+        )
+
+        canvas.create_text(
+            cx, badge_y, text=badge_text,
+            fill=color, font=("Arial", 7, "bold"),
+            tags="animated_cars"
+        )
+
+        # Badan mobil.
+        canvas.create_polygon(
+            cx - 9, cy - 3,
+            cx - 6, cy - 8,
+            cx + 6, cy - 8,
+            cx + 9, cy - 3,
+            cx + 9, cy + 5,
+            cx - 9, cy + 5,
+            fill=color,
+            outline="white",
+            width=1,
+            tags="animated_cars"
+        )
+
+        # Kaca mobil.
+        canvas.create_rectangle(
+            cx - 5, cy - 6,
+            cx + 5, cy - 3,
+            fill="#DCEBFF",
+            outline="white",
+            width=1,
+            tags="animated_cars"
+        )
+
+        # Roda mobil.
+        for wheel_x in (cx - 6, cx + 6):
+            canvas.create_oval(
+                wheel_x - 2, cy + 3,
+                wheel_x + 2, cy + 7,
+                fill="#202B3C",
+                outline="white",
+                width=1,
+                tags="animated_cars"
+            )
+
+    def refresh_cars():
+        canvas.delete("animated_cars")
+
+        for state in car_states:
+            if state["path"]:
+                draw_car(state)
+
+    # Tampilkan semua mobil pada posisi Start.
+    refresh_cars()
+
+    def animate_step():
+        """Majukan semua mobil satu petak pada tick yang sama."""
+        any_active = False
+
+        for state in car_states:
+            if not state["active"]:
+                continue
+
+            path = state["path"]
+            next_step = state["step"] + 1
+
+            if next_step >= len(path):
+                state["active"] = False
+                state["status"] = "Tiba di Goal"
+                continue
+
+            next_position = path[next_step]
+            nr, nc = next_position
+            tile_cost = grid[nr][nc]
+
+            # Seharusnya algoritma tidak melewati tembok.
+            if tile_cost == -1:
+                state["active"] = False
+                state["status"] = "Berhenti: menemukan tembok"
+                continue
+
+            # Tidak memasuki petak jika baterai tidak cukup.
+            if state["battery"] < tile_cost:
+                state["battery"] = 0
+                state["active"] = False
+                state["status"] = "Berhenti • baterai tidak cukup"
+                continue
+
+            # Mobil berpindah dan baterai dikurangi sesuai bobot petak.
+            state["step"] = next_step
+            state["position"] = next_position
+            state["battery"] -= tile_cost
+
+            if state["battery"] == 0:
+                state["active"] = False
+
+                if next_position == goal:
+                    state["status"] = "Tiba di Goal • baterai 0%"
+                else:
+                    state["status"] = "Berhenti • baterai habis"
+
+            elif next_position == goal:
+                state["active"] = False
+                state["status"] = "Tiba di Goal"
+
+            else:
+                state["status"] = "Sedang berjalan"
+
+        # Update baterai dan status seluruh mobil.
+        for state in car_states:
+            state["label"].config(
+                text=f"Baterai: {state['battery']}% | {state['status']}"
+            )
+
+            if state["active"]:
+                any_active = True
+
+        refresh_cars()
+
+        if any_active:
+            root.after(450, animate_step)
+        else:
             tk.Label(
-                card,
-                text="⚠ Baterai Tidak Cukup! (Sisa 0%)",
-                fg="white",
-                bg="#D32F2F",
-                font=("Arial", 9, "bold"),
-                padx=8,
-                pady=3
-            ).pack(anchor="w", pady=(4, 0))
+                panel,
+                text="Simulasi selesai.",
+                fg="#167A3E",
+                bg="#FFFFFF",
+                font=("Arial", 9, "bold")
+            ).pack(anchor="w", pady=(5, 2))
 
-    # TOMBOL NAVIGASI
-    btn_frame = tk.Frame(
-        legend_frame,
-        bg="#FFFFFF"
-    )
-
-    btn_frame.pack(
-        side=tk.BOTTOM,
-        fill=tk.X,
-        pady=(10, 0)
-    )
+    # Tombol navigasi.
+    btn_frame = tk.Frame(panel, bg="#FFFFFF")
+    btn_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
 
     tk.Button(
         btn_frame,
         text="🔁 Percobaan Baru (Peta Sama)",
         bg="#25A65A",
         fg="white",
-        font=("Arial", 10, "bold"),
+        font=("Arial", 9, "bold"),
         command=lambda: choose("same")
     ).pack(fill=tk.X, pady=2)
 
@@ -1025,7 +1122,7 @@ def draw_multi_results(grid, start, goal, results):
         text="🗺 Percobaan Baru (Peta Baru)",
         bg="#2478D4",
         fg="white",
-        font=("Arial", 10, "bold"),
+        font=("Arial", 9, "bold"),
         command=lambda: choose("new")
     ).pack(fill=tk.X, pady=2)
 
@@ -1034,11 +1131,10 @@ def draw_multi_results(grid, start, goal, results):
         text="Keluar",
         bg="#D92D20",
         fg="white",
-        font=("Arial", 10, "bold"),
+        font=("Arial", 9, "bold"),
         command=lambda: choose(None)
     ).pack(fill=tk.X, pady=2)
 
-    # ATUR UKURAN WINDOW
     root.update_idletasks()
 
     width = root.winfo_reqwidth() + 40
@@ -1050,6 +1146,9 @@ def draw_multi_results(grid, start, goal, results):
     root.geometry(
         f"{min(width, screen_w - 40)}x{min(height, screen_h - 80)}"
     )
+
+    # Mulai animasi setelah window tampil.
+    root.after(700, animate_step)
 
     root.mainloop()
 

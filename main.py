@@ -30,7 +30,7 @@ def run_experiment(grid, start, goal, selected_algorithms, battery):
         elapsed_ms = (time.perf_counter() - started_at) * 1000
 
         if path:
-            enough = total_cost < battery  # ubah ke <= kalau habis tepat di 0% dianggap sampai
+            enough = total_cost <= battery  # ubah ke <= kalau habis tepat di 0% dianggap sampai
             remaining = battery - total_cost if enough else 0
 
             print(f"[{algo_name}]")
