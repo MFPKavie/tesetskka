@@ -1099,8 +1099,35 @@ def draw_multi_results(grid, start, goal, results):
         )
         live_label.pack(anchor="w")
 
+        warning_frame = tk.Frame(
+            card,
+            bg="#FEE4E2",
+            highlightbackground="#D92D20",
+            highlightthickness=1,
+            padx=8,
+            pady=6
+        )
+
+        tk.Label(
+            warning_frame,
+            text="⚠",
+            font=("Arial", 13, "bold"),
+            fg="#D92D20",
+            bg="#FEE4E2"
+        ).pack(side=tk.LEFT, padx=(0, 7))
+
+        tk.Label(
+            warning_frame,
+            text="BATERAI TIDAK CUKUP\nSisa baterai: 0%",
+            font=("Arial", 9, "bold"),
+            fg="#B42318",
+            bg="#FEE4E2",
+            justify=tk.LEFT
+        ).pack(side=tk.LEFT)
+
         car_states.append({
             "name": name,
+            "warning_frame": warning_frame,
             "color": color,
             "path": path,
             "step": 0,
@@ -1246,7 +1273,7 @@ def draw_multi_results(grid, start, goal, results):
         command=lambda: set_zoom(1.0)
     ).pack(side=tk.LEFT, padx=4)
     tk.Label(
-        zoom_bar, text="Ctrl + + / Ctrl + - untuk zoom",
+        zoom_bar, text="Ctrl + + / Ctrl - - untuk zoom",
         bg="#F4F6F9", fg="#667085", font=("Arial", 8)
     ).pack(side=tk.LEFT, padx=8)
 
@@ -1254,6 +1281,7 @@ def draw_multi_results(grid, start, goal, results):
         """Majukan seluruh mobil satu petak pada tick yang sama."""
         any_active = False
 
+        # Proses pergerakan setiap algoritma
         for state in car_states:
             if not state["active"]:
                 continue
@@ -1275,44 +1303,67 @@ def draw_multi_results(grid, start, goal, results):
                 state["status"] = "Berhenti: menemukan tembok"
                 continue
 
+            # Periksa kecukupan baterai
             if state["battery"] < tile_cost:
                 state["battery"] = 0
                 state["active"] = False
-                state["status"] = "Berhenti • baterai tidak cukup"
+                state["status"] = "Baterai tidak cukup"
                 continue
 
+            # Pindahkan mobil dan kurangi baterai
             state["step"] = next_step
             state["position"] = next_position
             state["battery"] -= tile_cost
 
-            if state["battery"] == 0:
-                state["active"] = False
-                state["status"] = (
-                    "Tiba di Goal • baterai 0%"
-                    if next_position == goal else "Berhenti • baterai habis"
-                )
-            elif next_position == goal:
+            if next_position == goal:
                 state["active"] = False
                 state["status"] = "Tiba di Goal"
+            elif state["battery"] == 0:
+                state["active"] = False
+                state["status"] = "Baterai habis"
             else:
                 state["status"] = "Sedang berjalan"
 
+        # Update tampilan setiap algoritma secara terpisah
         for state in car_states:
             state["label"].config(
                 text=f"Baterai: {state['battery']}% | {state['status']}"
             )
+
+            # Warning box milik masing-masing algoritma
+            warning = state["warning_frame"]
+
+            if state["status"] == "Baterai tidak cukup":
+                if not warning.winfo_manager():
+                    warning.pack(
+                        anchor="w",
+                        fill=tk.X,
+                        pady=(5, 2)
+                    )
+            else:
+                warning.pack_forget()
+
             if state["active"]:
                 any_active = True
 
+        # Render posisi mobil terbaru
         render_scene()
 
+        # Lanjutkan animasi atau tampilkan simulasi selesai
         if any_active:
-            animation_job["id"] = root.after(animation_delay, animate_step)
+            animation_job["id"] = root.after(
+                animation_delay,
+                animate_step
+            )
         else:
             tk.Label(
-                panel, text="Simulasi selesai.", fg="#167A3E",
-                bg="#FFFFFF", font=("Arial", 9, "bold")
+                panel,
+                text="Simulasi selesai.",
+                fg="#167A3E",
+                bg="#FFFFFF",
+                font=("Arial", 9, "bold")
             ).pack(anchor="w", pady=(5, 2))
+
             content.update_idletasks()
             view.configure(scrollregion=view.bbox("all"))
 
